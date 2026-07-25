@@ -341,12 +341,23 @@
     </div>
     <div class="settings-body">
       <div class="field">
+        <label>アカウント</label>
+        <div id="authSignedOut">
+          <button class="btn btn-outline" id="googleSignInBtn" type="button">Googleでログイン</button>
+          <p class="settings-hint">ログインすると記録がクラウドに保存され、他の端末からも同じ記録を見られるようになります。</p>
+        </div>
+        <div id="authSignedIn" style="display:none">
+          <p class="settings-hint" id="authUserEmail" style="margin:0 0 8px; color:var(--text); font-weight:700;"></p>
+          <button class="btn btn-outline" id="signOutBtn" type="button">ログアウト</button>
+        </div>
+      </div>
+      <div class="field">
         <label for="apiKeyInput">Anthropic APIキー</label>
         <div class="key-row">
           <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
           <button class="icon-btn" id="toggleKeyVisBtn" type="button" aria-label="表示切替">👁</button>
         </div>
-        <p class="settings-hint">このブラウザ内(localStorage)にのみ保存され、Anthropic社のAPI以外には送信されません。APIキーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> から取得できます(利用には料金が発生します)。</p>
+        <p class="settings-hint">このブラウザ内(localStorage)にのみ保存され、Anthropic社のAPI以外には送信されません。APIキーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> から取得できます(利用には料金が発生します)。ログイン中はこの設定もクラウドに同期されます。</p>
       </div>
       <div class="field">
         <label for="modelSelect">使用モデル</label>
@@ -409,6 +420,10 @@
     lastFeedback: loadJSON(LS.feedback, null)
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+
+  // cloudHooks is injected by the Firebase module script once a user signs in.
+  // { writeEntry(entry), writeProfile() } — null while signed out / offline.
+  var cloudHooks = null;
 
   // ---------------------------------------------------------------------
   // helpers
@@ -528,6 +543,7 @@
     if (state.dict[category].indexOf(name) === -1) {
       state.dict[category].push(name);
       saveJSON(LS.dict, state.dict);
+      if (cloudHooks) cloudHooks.writeProfile();
       renderSuggestions();
     }
   }
@@ -682,8 +698,12 @@
         entry.weight = weight; entry.reps = reps; entry.sets = sets;
       }
 
-      state.entries.push(entry);
-      saveJSON(LS.entries, state.entries);
+      if (cloudHooks) {
+        cloudHooks.writeEntry(entry);
+      } else {
+        state.entries.push(entry);
+        saveJSON(LS.entries, state.entries);
+      }
 
       exerciseInput.value = '';
       state.manualOverride = false;
@@ -857,6 +877,7 @@
       var data = JSON.parse(text);
       state.lastFeedback = { data: data, generatedAt: Date.now(), model: state.settings.model, count: todays.length };
       saveJSON(LS.feedback, state.lastFeedback);
+      if (cloudHooks) cloudHooks.writeProfile();
       renderFeedback();
     }).catch(function (e) {
       showFeedbackError('フィードバックの取得に失敗しました: ' + e.message);
@@ -882,6 +903,7 @@
   $('saveSettingsBtn').addEventListener('click', function () {
     state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value };
     saveJSON(LS.settings, state.settings);
+    if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
     showToast('設定を保存しました');
   });
@@ -943,6 +965,7 @@
       state.dict[trimmed] = state.dict[trimmed] || [];
       saveJSON(LS.categories, state.categories);
       saveJSON(LS.dict, state.dict);
+      if (cloudHooks) cloudHooks.writeProfile();
       renderHistoryPills();
     }
     selectCategory(trimmed, 'manual');
@@ -951,6 +974,23 @@
   // ---------------------------------------------------------------------
   // init
   // ---------------------------------------------------------------------
+  function reloadFromLocal() {
+    state.entries = loadJSON(LS.entries, []);
+    state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
+    state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
+    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' });
+    state.lastFeedback = loadJSON(LS.feedback, null);
+    state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+    state.activeCategory = null;
+    state.manualOverride = false;
+    renderCategoryPills();
+    renderHistoryPills();
+    renderSuggestions();
+    selectCategory(state.categories[0], 'idle');
+    renderHistory();
+    renderFeedback();
+  }
+
   function init() {
     renderCategoryPills();
     renderHistoryPills();
@@ -960,6 +1000,211 @@
     renderFeedback();
   }
   init();
+
+  // ---------------------------------------------------------------------
+  // integration surface for the Firebase (Google login / cloud sync) module.
+  // That script is loaded separately and fails gracefully offline — this app
+  // works exactly as before (localStorage only) whenever cloudHooks is null.
+  // ---------------------------------------------------------------------
+  window.TetsuLogApp = {
+    getState: function () { return state; },
+    showToast: showToast,
+    setCloudHooks: function (hooks) { cloudHooks = hooks; },
+    applyCloudEntries: function (list) {
+      state.entries = list;
+      renderTodayList();
+      renderHistory();
+    },
+    applyCloudProfile: function (profile) {
+      if (profile.categories && profile.categories.length) state.categories = profile.categories;
+      if (profile.dict) state.dict = profile.dict;
+      if (profile.settings) state.settings = profile.settings;
+      if (profile.lastFeedback !== undefined) state.lastFeedback = profile.lastFeedback;
+      state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+      renderCategoryPills();
+      renderHistoryPills();
+      renderSuggestions();
+      if (!state.activeCategory || state.categories.indexOf(state.activeCategory) === -1) {
+        selectCategory(state.categories[0], 'idle');
+      } else {
+        renderTodayList();
+      }
+      renderFeedback();
+    },
+    reloadFromLocal: reloadFromLocal
+  };
+})();
+</script>
+
+<script type="module">
+// Cloud sync (Google login + Firestore). Loaded independently from the main
+// app script above: if this fails (offline, CDN blocked, etc.) the app keeps
+// working exactly as before in local-only (localStorage) mode.
+(async function () {
+  var FIREBASE_VERSION = '10.14.1';
+  var firebaseConfig = {
+    apiKey: 'AIzaSyDR4FXSRK-Pcwj2auHns_6tJXpIJgTJSfo',
+    authDomain: 'tetsu-log-app.firebaseapp.com',
+    projectId: 'tetsu-log-app',
+    storageBucket: 'tetsu-log-app.firebasestorage.app',
+    messagingSenderId: '104922680988',
+    appId: '1:104922680988:web:d49dedfb00357a8a77a759',
+    measurementId: 'G-TMCP7DEKHJ'
+  };
+
+  var appModule, authModule, fsModule;
+  try {
+    appModule = await import('https://www.gstatic.com/firebasejs/' + FIREBASE_VERSION + '/firebase-app.js');
+    authModule = await import('https://www.gstatic.com/firebasejs/' + FIREBASE_VERSION + '/firebase-auth.js');
+    fsModule = await import('https://www.gstatic.com/firebasejs/' + FIREBASE_VERSION + '/firebase-firestore.js');
+  } catch (e) {
+    console.warn('[鉄ログ] クラウド機能を読み込めませんでした。ローカルモードで動作します。', e);
+    return;
+  }
+
+  var initializeApp = appModule.initializeApp;
+  var getAuth = authModule.getAuth;
+  var GoogleAuthProvider = authModule.GoogleAuthProvider;
+  var signInWithRedirect = authModule.signInWithRedirect;
+  var getRedirectResult = authModule.getRedirectResult;
+  var onAuthStateChanged = authModule.onAuthStateChanged;
+  var signOut = authModule.signOut;
+  var initializeFirestore = fsModule.initializeFirestore;
+  var persistentLocalCache = fsModule.persistentLocalCache;
+  var getFirestore = fsModule.getFirestore;
+  var doc = fsModule.doc;
+  var setDoc = fsModule.setDoc;
+  var getDoc = fsModule.getDoc;
+  var collection = fsModule.collection;
+  var onSnapshot = fsModule.onSnapshot;
+
+  var firebaseApp = initializeApp(firebaseConfig);
+  var auth = getAuth(firebaseApp);
+  var googleProvider = new GoogleAuthProvider();
+  var db;
+  try {
+    db = initializeFirestore(firebaseApp, { localCache: persistentLocalCache() });
+  } catch (e) {
+    db = getFirestore(firebaseApp);
+  }
+
+  var cloudUser = null;
+  var unsubEntries = null;
+  var unsubProfile = null;
+
+  function entriesCol() { return collection(db, 'users', cloudUser.uid, 'entries'); }
+  function profileRef() { return doc(db, 'users', cloudUser.uid); }
+
+  function updateAuthUI() {
+    var signedOutEl = document.getElementById('authSignedOut');
+    var signedInEl = document.getElementById('authSignedIn');
+    if (!signedOutEl || !signedInEl) return;
+    if (cloudUser) {
+      signedOutEl.style.display = 'none';
+      signedInEl.style.display = 'block';
+      var emailEl = document.getElementById('authUserEmail');
+      if (emailEl) emailEl.textContent = cloudUser.email || cloudUser.displayName || 'ログイン中';
+    } else {
+      signedOutEl.style.display = 'block';
+      signedInEl.style.display = 'none';
+    }
+  }
+
+  function writeProfile() {
+    if (!cloudUser || !window.TetsuLogApp) return;
+    var s = window.TetsuLogApp.getState();
+    setDoc(profileRef(), {
+      categories: s.categories,
+      dict: s.dict,
+      settings: s.settings,
+      lastFeedback: s.lastFeedback
+    }, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
+  }
+
+  function writeEntry(entry) {
+    if (!cloudUser) return;
+    setDoc(doc(entriesCol(), entry.id), entry).catch(function (e) {
+      console.warn('[鉄ログ] entry sync failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('同期に失敗しました: ' + e.message);
+    });
+  }
+
+  async function subscribeCloud() {
+    var ref = profileRef();
+    var snap;
+    try {
+      snap = await getDoc(ref);
+    } catch (e) {
+      console.warn('[鉄ログ] profile fetch failed', e);
+      return;
+    }
+
+    if (!snap.exists()) {
+      // first cloud login for this account: migrate whatever is in this
+      // browser's local storage up to Firestore as the starting point.
+      var local = window.TetsuLogApp.getState();
+      try {
+        await setDoc(ref, {
+          categories: local.categories,
+          dict: local.dict,
+          settings: local.settings,
+          lastFeedback: local.lastFeedback
+        });
+        var localEntries = local.entries.slice();
+        for (var i = 0; i < localEntries.length; i++) {
+          await setDoc(doc(entriesCol(), localEntries[i].id), localEntries[i]);
+        }
+        window.TetsuLogApp.showToast('この端末の記録をクラウドに移行しました');
+      } catch (e) {
+        console.warn('[鉄ログ] initial migration failed', e);
+      }
+    }
+
+    unsubProfile = onSnapshot(ref, function (docSnap) {
+      if (!docSnap.exists()) return;
+      window.TetsuLogApp.applyCloudProfile(docSnap.data());
+    });
+
+    unsubEntries = onSnapshot(entriesCol(), function (qs) {
+      var list = [];
+      qs.forEach(function (d) { list.push(d.data()); });
+      window.TetsuLogApp.applyCloudEntries(list);
+    });
+  }
+
+  onAuthStateChanged(auth, function (user) {
+    cloudUser = user || null;
+    updateAuthUI();
+    if (!window.TetsuLogApp) return;
+    if (cloudUser) {
+      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile });
+      subscribeCloud();
+    } else {
+      if (unsubEntries) { unsubEntries(); unsubEntries = null; }
+      if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+      window.TetsuLogApp.setCloudHooks(null);
+      window.TetsuLogApp.reloadFromLocal();
+    }
+  });
+
+  getRedirectResult(auth).catch(function (e) {
+    console.warn('[鉄ログ] sign-in redirect error', e);
+    if (window.TetsuLogApp) window.TetsuLogApp.showToast('ログインに失敗しました: ' + e.message);
+  });
+
+  var signInBtn = document.getElementById('googleSignInBtn');
+  var signOutBtn = document.getElementById('signOutBtn');
+  if (signInBtn) signInBtn.addEventListener('click', function () {
+    signInWithRedirect(auth, googleProvider).catch(function (e) {
+      console.warn('[鉄ログ] sign-in error', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('ログインに失敗しました: ' + e.message);
+    });
+  });
+  if (signOutBtn) signOutBtn.addEventListener('click', function () {
+    signOut(auth).then(function () {
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('ログアウトしました');
+    });
+  });
 })();
 </script>
 </body>
