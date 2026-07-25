@@ -1283,6 +1283,7 @@
   var initializeApp = appModule.initializeApp;
   var getAuth = authModule.getAuth;
   var GoogleAuthProvider = authModule.GoogleAuthProvider;
+  var signInWithPopup = authModule.signInWithPopup;
   var signInWithRedirect = authModule.signInWithRedirect;
   var getRedirectResult = authModule.getRedirectResult;
   var onAuthStateChanged = authModule.onAuthStateChanged;
@@ -1437,7 +1438,18 @@
   var signInBtn = document.getElementById('googleSignInBtn');
   var signOutBtn = document.getElementById('signOutBtn');
   if (signInBtn) signInBtn.addEventListener('click', function () {
-    signInWithRedirect(auth, googleProvider).catch(function (e) {
+    // Popup keeps sign-in in the same page context, which is more reliable
+    // than a full-page redirect (Safari can fail to persist auth state
+    // across the redirect round-trip to accounts.google.com and back).
+    signInWithPopup(auth, googleProvider).catch(function (e) {
+      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+        signInWithRedirect(auth, googleProvider).catch(function (e2) {
+          console.warn('[鉄ログ] sign-in redirect fallback error', e2);
+          if (window.TetsuLogApp) window.TetsuLogApp.showToast('ログインに失敗しました: ' + e2.message);
+        });
+        return;
+      }
+      if (e && e.code === 'auth/cancelled-popup-request') return;
       console.warn('[鉄ログ] sign-in error', e);
       if (window.TetsuLogApp) window.TetsuLogApp.showToast('ログインに失敗しました: ' + e.message);
     });
