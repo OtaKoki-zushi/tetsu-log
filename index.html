@@ -115,11 +115,12 @@
   .auth-badge {
     font-size: 10.5px; font-weight: 700; color: var(--text-faint);
     padding: 5px 10px; border-radius: 999px; background: var(--surface-2);
-    border: 1px solid var(--border); white-space: nowrap;
+    border: 1px solid var(--border); max-width: 110px;
     display: flex; align-items: center; gap: 5px;
   }
   .auth-badge.signed-in { color: var(--success); background: var(--success-soft); border-color: transparent; }
   .auth-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+  .auth-badge-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
   .screen {
     flex: 1; overflow-y: auto; padding: 16px 20px 24px;
@@ -1324,9 +1325,19 @@
       if (headerBadge) {
         headerBadge.classList.add('signed-in');
         headerBadge.title = cloudUser.email || '';
-        headerBadge.innerHTML = cloudUser.photoURL
-          ? '<img class="auth-avatar" src="' + cloudUser.photoURL + '" alt="">同期中'
-          : '● ログイン中';
+        headerBadge.innerHTML = '';
+        if (cloudUser.photoURL) {
+          var img = document.createElement('img');
+          img.className = 'auth-avatar';
+          img.src = cloudUser.photoURL;
+          img.alt = '';
+          headerBadge.appendChild(img);
+        }
+        var label = document.createElement('span');
+        label.className = 'auth-badge-label';
+        var shortName = cloudUser.displayName ? cloudUser.displayName.split(' ')[0] : (cloudUser.email || 'ログイン中');
+        label.textContent = shortName;
+        headerBadge.appendChild(label);
       }
     } else {
       if (signedOutEl) signedOutEl.style.display = 'block';
