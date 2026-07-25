@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>鉄ログ — 筋トレ記録 & AIフィードバック</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #F5F1E8;
+    --page-bg: #EDE7D8;
+    --surface: #FFFFFF;
+    --surface-2: #FBF7EF;
+    --text: #211D19;
+    --text-muted: #756F66;
+    --text-faint: #A69E8E;
+    --border: #E4DDCE;
+    --accent: #A83726;
+    --accent-soft: #F1DAD2;
+    --accent-ink: #FFF8F0;
+    --success: #3F7D5C;
+    --success-soft: #DCEBE1;
+    --nav-bg: #FFFFFF;
+    --shadow: 0 20px 45px -20px rgba(33, 29, 25, 0.35);
+  }
+  :root[data-theme="dark"] {
+    --bg: #17161A;
+    --page-bg: #0F0E11;
+    --surface: #201E22;
+    --surface-2: #29262B;
+    --text: #F3EFE8;
+    --text-muted: #A39C90;
+    --text-faint: #716B62;
+    --border: #322E31;
+    --accent: #E0553B;
+    --accent-soft: #3A241F;
+    --accent-ink: #FFF8F0;
+    --success: #5FBE93;
+    --success-soft: #21332B;
+    --nav-bg: #1C1A1E;
+    --shadow: 0 25px 50px -20px rgba(0, 0, 0, 0.6);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161A;
+      --page-bg: #0F0E11;
+      --surface: #201E22;
+      --surface-2: #29262B;
+      --text: #F3EFE8;
+      --text-muted: #A39C90;
+      --text-faint: #716B62;
+      --border: #322E31;
+      --accent: #E0553B;
+      --accent-soft: #3A241F;
+      --accent-ink: #FFF8F0;
+      --success: #5FBE93;
+      --success-soft: #21332B;
+      --nav-bg: #1C1A1E;
+      --shadow: 0 25px 50px -20px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--page-bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+      "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", "Segoe UI", sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  @media (min-width: 481px) {
+    .app { box-shadow: var(--shadow); min-height: calc(100dvh - 40px); margin: 20px auto; border-radius: 24px; }
+  }
+
+  .app-header {
+    padding: max(18px, env(safe-area-inset-top)) 20px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; flex-shrink: 0;
+  }
+  .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.06em; margin-top: 1px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); flex-shrink: 0; cursor: pointer;
+  }
+
+  .screen {
+    flex: 1; overflow-y: auto; padding: 16px 20px 24px;
+    display: none; flex-direction: column; gap: 18px;
+    -ms-overflow-style: none; scrollbar-width: none;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+  .screen.active { display: flex; animation: rise 0.28s ease both; }
+  @media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  h2.screen-title { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .screen-desc { font-size: 12.5px; color: var(--text-muted); margin: 2px 0 0; line-height: 1.6; }
+
+  .pillrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .pill {
+    flex-shrink: 0; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .pill.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .pill.ghost { color: var(--text-faint); border-style: dashed; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin: 0; }
+  .card-label { font-size: 11px; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 700; margin-bottom: 10px; display: block; }
+
+  .field-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+  .field input, .field select {
+    font: inherit; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 14.5px; width: 100%;
+  }
+  .field input::placeholder { color: var(--text-faint); }
+  .field-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .field-trio.two-col { grid-template-columns: 1fr 1fr; }
+
+  .detect-hint {
+    font-size: 11.5px; color: var(--text-faint); padding: 8px 10px; border-radius: 8px;
+    background: var(--surface-2); border: 1px dashed var(--border); line-height: 1.5;
+  }
+  .detect-hint.detected { color: var(--accent); background: var(--accent-soft); border-style: solid; border-color: transparent; font-weight: 700; }
+  .detect-hint strong { font-weight: 800; }
+
+  .btn { appearance: none; border: none; font: inherit; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; cursor: pointer; width: 100%; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-top: 2px; }
+  .section-heading h3 { font-size: 14px; margin: 0; font-weight: 800; }
+  .section-heading span { font-size: 11.5px; color: var(--text-faint); }
+
+  .log-list { display: flex; flex-direction: column; gap: 8px; }
+  .log-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+  .log-name { font-size: 13.5px; font-weight: 700; }
+  .log-meta { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .log-stat { text-align: right; flex-shrink: 0; padding-left: 10px; }
+  .log-weight { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; white-space: nowrap; }
+  .log-weight span { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+  .delta { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 800; color: var(--success); background: var(--success-soft); padding: 2px 6px; border-radius: 999px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .delta.down { color: var(--text-muted); background: var(--surface-2); }
+
+  .cta-bar { position: sticky; bottom: 0; background: linear-gradient(to top, var(--bg) 65%, transparent); padding-top: 14px; margin-top: -4px; }
+
+  .day-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .day-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .day-header .date { font-size: 13px; font-weight: 800; }
+  .part-tag { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+  .day-header .volume { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .feedback-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px 18px; position: relative; overflow: hidden; }
+  .stamp { position: absolute; top: 14px; right: 14px; width: 52px; height: 52px; border: 2.5px solid var(--accent); color: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; transform: rotate(-9deg); opacity: 0.85; }
+  .fb-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 14px; }
+  .fb-summary { font-size: 14px; line-height: 1.75; padding-right: 44px; }
+  .fb-block { margin-top: 18px; }
+  .fb-block h4 { font-size: 12px; letter-spacing: 0.04em; font-weight: 800; margin: 0 0 8px; }
+  .fb-block h4.good { color: var(--success); }
+  .fb-block h4.improve { color: var(--accent); }
+  .fb-block ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .fb-block li { font-size: 13px; line-height: 1.6; padding-left: 18px; position: relative; }
+  .fb-block li::before { content: ""; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: 0.5; }
+  .fb-next { margin-top: 16px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 12px; padding: 12px 14px; }
+  .fb-next h4 { font-size: 12px; font-weight: 800; margin: 0 0 6px; }
+  .fb-next p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+
+  .empty-note { font-size: 12.5px; color: var(--text-faint); text-align: center; padding: 22px 0; margin: 0; }
+
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); margin: 0 auto; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  .bottom-nav { flex-shrink: 0; display: flex; border-top: 1px solid var(--border); background: var(--nav-bg); padding-bottom: env(safe-area-inset-bottom); }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; color: var(--text-faint); background: none; border: none; font: inherit; cursor: pointer; }
+  .nav-item.active { color: var(--accent); }
+  .nav-item svg { width: 20px; height: 20px; }
+  .nav-item span { font-size: 10.5px; font-weight: 700; }
+
+  .settings-overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 50;
+    display: none; flex-direction: column;
+  }
+  .settings-overlay.open { display: flex; }
+  .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
+  .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
+  .settings-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; margin: 6px 0 0; }
+  .settings-hint a { color: var(--accent); }
+  .key-row { display: flex; gap: 8px; }
+  .key-row input { flex: 1; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px);
+    background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 700;
+    padding: 10px 16px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease; z-index: 100; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div class="app-header">
+    <div class="brand">
+      <div class="brand-mark">鉄</div>
+      <div>
+        <div class="brand-name">鉄ログ</div>
+        <div class="brand-sub">TETSU LOG</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="設定">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+  </div>
+
+  <!-- ===== 記録 ===== -->
+  <section class="screen active" id="screen-record">
+    <div>
+      <h2 class="screen-title">今日のトレーニング</h2>
+      <p class="screen-desc">種目名を入力すると部位を自動判定します。違っていれば下のピルで手動修正できます。</p>
+    </div>
+
+    <div class="pillrow" id="categoryPills">
+      <button class="pill ghost" id="addCategoryPill" type="button">＋ 部位を追加</button>
+    </div>
+
+    <form class="card" id="addForm">
+      <span class="card-label">種目を追加</span>
+      <div class="field-row">
+        <div class="field">
+          <label for="exerciseName">種目名</label>
+          <input type="text" id="exerciseName" placeholder="例）ベンチプレス" autocomplete="off" list="exerciseSuggestions">
+          <datalist id="exerciseSuggestions"></datalist>
+        </div>
+
+        <div class="field-trio" id="trio-strength">
+          <div class="field"><label>重量 (kg)</label><input type="number" id="inputWeight" step="0.5" min="0" inputmode="decimal"></div>
+          <div class="field"><label>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
+          <div class="field"><label>セット</label><input type="number" id="inputSets" min="1" inputmode="numeric"></div>
+        </div>
+
+        <div class="field-trio two-col" id="trio-cardio" style="display:none">
+          <div class="field"><label>時間 (分)</label><input type="number" id="inputMinutes" min="1" inputmode="numeric"></div>
+          <div class="field"><label>距離 (km・任意)</label><input type="number" id="inputDistance" step="0.1" min="0" inputmode="decimal"></div>
+        </div>
+
+        <div class="detect-hint" id="detectHint">種目名を入力すると部位を自動判定します</div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="btn btn-primary" type="submit" id="addEntryBtn">＋ 記録に追加</button>
+    </form>
+
+    <div>
+      <div class="section-heading">
+        <h3 id="todayHeading">本日の記録</h3>
+        <span id="todayCount"></span>
+      </div>
+      <div class="log-list" id="todayList"></div>
+    </div>
+
+    <div class="cta-bar">
+      <button class="btn btn-primary" id="gotoFeedbackBtn" type="button">フィードバックをもらう →</button>
+    </div>
+  </section>
+
+  <!-- ===== 履歴 ===== -->
+  <section class="screen" id="screen-history">
+    <div>
+      <h2 class="screen-title">履歴</h2>
+      <p class="screen-desc">部位ごとに絞り込んで振り返れます。</p>
+    </div>
+    <div class="pillrow" id="historyPills"></div>
+    <div id="historyList"></div>
+  </section>
+
+  <!-- ===== フィードバック ===== -->
+  <section class="screen" id="screen-feedback">
+    <div>
+      <h2 class="screen-title">AIフィードバック</h2>
+      <p class="screen-desc">本日の記録をもとに、Claudeが評価します。</p>
+    </div>
+    <div id="feedbackArea"></div>
+  </section>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" data-target="record" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      <span>記録</span>
+    </button>
+    <button class="nav-item" data-target="history" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+      <span>履歴</span>
+    </button>
+    <button class="nav-item" data-target="feedback" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
+      <span>フィードバック</span>
+    </button>
+  </div>
+
+  <!-- ===== 設定 ===== -->
+  <div class="settings-overlay" id="settingsOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeSettingsBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2>設定</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body">
+      <div class="field">
+        <label for="apiKeyInput">Anthropic APIキー</label>
+        <div class="key-row">
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+          <button class="icon-btn" id="toggleKeyVisBtn" type="button" aria-label="表示切替">👁</button>
+        </div>
+        <p class="settings-hint">このブラウザ内(localStorage)にのみ保存され、Anthropic社のAPI以外には送信されません。APIキーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> から取得できます(利用には料金が発生します)。</p>
+      </div>
+      <div class="field">
+        <label for="modelSelect">使用モデル</label>
+        <select id="modelSelect">
+          <option value="claude-opus-4-8">Claude Opus 4.8(高精度・推奨)</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5(バランス)</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5(高速・低コスト)</option>
+        </select>
+        <p class="settings-hint">部位の自動判定とフィードバック生成の両方で使用します。</p>
+      </div>
+      <button class="btn btn-primary" id="saveSettingsBtn" type="button">保存する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------
+  // storage
+  // ---------------------------------------------------------------------
+  var LS = {
+    entries: 'tetsulog_entries',
+    categories: 'tetsulog_categories',
+    dict: 'tetsulog_dict',
+    settings: 'tetsulog_settings',
+    feedback: 'tetsulog_last_feedback'
+  };
+
+  function loadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage full / disabled */ }
+  }
+
+  var DEFAULT_CATEGORIES = ['胸', '背中', '肩', '腕', '脚', '有酸素'];
+  var DEFAULT_DICT = {
+    '胸': ['ベンチプレス', 'チェストプレス', 'ダンベルフライ', 'インクラインベンチプレス', 'インクラインダンベルプレス', 'デクラインベンチプレス', 'ケーブルフライ', 'ペックフライ', 'ディップス', 'プッシュアップ', '腕立て伏せ', '腕立て', 'スミスマシンベンチプレス'],
+    '背中': ['デッドリフト', 'ラットプルダウン', 'ベントオーバーロウ', 'シーテッドロウ', '懸垂', 'チンニング', 'プルアップ', 'Tバーロウ', 'ワンハンドロウ', 'ケーブルロウ', 'グッドモーニング'],
+    '肩': ['ショルダープレス', 'サイドレイズ', 'リアレイズ', 'フロントレイズ', 'アップライトロウ', 'アーノルドプレス', 'フェイスプル', 'ミリタリープレス'],
+    '腕': ['アームカール', 'バーベルカール', 'ダンベルカール', 'ハンマーカール', 'インクラインカール', 'トライセプスプッシュダウン', 'トライセプスエクステンション', 'トライセプスディップス', 'キックバック', 'スカルクラッシャー', 'カール'],
+    '脚': ['スクワット', 'フロントスクワット', 'レッグプレス', 'レッグカール', 'レッグエクステンション', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ', 'ヒップスラスト', 'ハムストリングカール', 'アダクション', 'アブダクション'],
+    '有酸素': ['ランニング', 'ジョギング', 'ウォーキング', 'エアロバイク', 'バイク', 'トレッドミル', '水泳', 'スイミング', 'HIIT', 'ローイングマシン', '縄跳び', 'サイクリング', 'エリプティカル']
+  };
+
+  var state = {
+    entries: loadJSON(LS.entries, []),
+    categories: loadJSON(LS.categories, DEFAULT_CATEGORIES.slice()),
+    dict: loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT))),
+    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' }),
+    activeCategory: null,
+    manualOverride: false,
+    detectMode: 'idle', // idle | dict | ai | manual | loading
+    historyFilter: 'すべて',
+    lastFeedback: loadJSON(LS.feedback, null)
+  };
+  state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+
+  // ---------------------------------------------------------------------
+  // helpers
+  // ---------------------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function todayStr() {
+    var d = new Date();
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function formatDateLabel(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00');
+    var wd = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日(' + wd + ')';
+  }
+  function formatRelativeTime(ts) {
+    var diff = Date.now() - ts;
+    if (diff < 60000) return 'たった今';
+    if (diff < 3600000) return Math.floor(diff / 60000) + '分前';
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  var toastTimer = null;
+  function showToast(msg) {
+    var t = $('toastEl');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toastEl';
+      t.className = 'toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  // ---------------------------------------------------------------------
+  // Claude API
+  // ---------------------------------------------------------------------
+  function callClaude(opts) {
+    var body = {
+      model: opts.model,
+      max_tokens: opts.maxTokens || 1024,
+      system: opts.system,
+      messages: opts.messages
+    };
+    if (opts.outputFormat) body.output_config = { format: opts.outputFormat };
+
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': opts.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.json().catch(function () { return {}; }).then(function (j) {
+          var msg = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + res.status);
+          throw new Error(msg);
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      var block = (data.content || []).filter(function (b) { return b.type === 'text'; })[0];
+      return block ? block.text : '';
+    });
+  }
+
+  function classifyWithAI(name) {
+    if (!state.settings.apiKey) return Promise.resolve(null);
+    var categories = state.categories.join('、');
+    var system = 'あなたは筋トレメニューの分類器です。与えられた種目名が次のどの部位に該当するか、リストの中から1つだけ選び、部位名のみを出力してください。他の文章や記号は一切出力しないでください。部位候補: ' + categories;
+    return callClaude({
+      apiKey: state.settings.apiKey,
+      model: state.settings.model,
+      system: system,
+      messages: [{ role: 'user', content: name }],
+      maxTokens: 30
+    }).then(function (text) {
+      var cleaned = text.trim();
+      if (state.categories.indexOf(cleaned) !== -1) return cleaned;
+      var found = state.categories.filter(function (c) { return cleaned.indexOf(c) !== -1; })[0];
+      return found || null;
+    }).catch(function (e) {
+      showToast('AI判定に失敗しました: ' + e.message);
+      return null;
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // classification (dict + learning)
+  // ---------------------------------------------------------------------
+  function detectFromDict(name) {
+    var n = (name || '').trim();
+    if (!n) return null;
+    for (var i = 0; i < state.categories.length; i++) {
+      var cat = state.categories[i];
+      var words = state.dict[cat] || [];
+      for (var j = 0; j < words.length; j++) {
+        if (words[j] && n.indexOf(words[j]) !== -1) return cat;
+      }
+    }
+    return null;
+  }
+  function learn(category, name) {
+    if (!state.dict[category]) state.dict[category] = [];
+    if (state.dict[category].indexOf(name) === -1) {
+      state.dict[category].push(name);
+      saveJSON(LS.dict, state.dict);
+      renderSuggestions();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // rendering — record screen
+  // ---------------------------------------------------------------------
+  function renderCategoryPills() {
+    var row = $('categoryPills');
+    var addBtn = $('addCategoryPill');
+    Array.prototype.slice.call(row.querySelectorAll('.pill[data-category]')).forEach(function (el) { el.remove(); });
+    state.categories.forEach(function (cat) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pill' + (cat === state.activeCategory ? ' active' : '');
+      btn.dataset.category = cat;
+      btn.textContent = cat;
+      btn.addEventListener('click', function () { selectCategory(cat, 'manual'); });
+      row.insertBefore(btn, addBtn);
+    });
+  }
+
+  function renderDetectHint() {
+    var hint = $('detectHint');
+    switch (state.detectMode) {
+      case 'loading':
+        hint.textContent = '🤖 AIが部位を判定中…';
+        hint.classList.remove('detected');
+        break;
+      case 'dict':
+        hint.innerHTML = '🔍 自動判定: <strong>' + escapeHtml(state.activeCategory) + '</strong>(違う場合はピルで選び直せます)';
+        hint.classList.add('detected');
+        break;
+      case 'ai':
+        hint.innerHTML = '🤖 AI判定: <strong>' + escapeHtml(state.activeCategory) + '</strong>(この種目名は次回から自動判定されます)';
+        hint.classList.add('detected');
+        break;
+      case 'manual':
+        hint.textContent = '手動選択中: ' + state.activeCategory;
+        hint.classList.remove('detected');
+        break;
+      default:
+        hint.textContent = '種目名を入力すると部位を自動判定します';
+        hint.classList.remove('detected');
+    }
+  }
+
+  function selectCategory(cat, mode) {
+    state.activeCategory = cat;
+    state.detectMode = mode;
+    state.manualOverride = (mode === 'manual');
+    renderCategoryPills();
+    var isCardio = cat === '有酸素';
+    $('trio-strength').style.display = isCardio ? 'none' : 'grid';
+    $('trio-cardio').style.display = isCardio ? 'grid' : 'none';
+    $('exerciseName').placeholder = isCardio ? '例）ランニング' : '例）ベンチプレス';
+    renderDetectHint();
+    renderTodayList();
+  }
+
+  function entryRowHtml(e) {
+    var isCardio = e.minutes !== undefined;
+    if (isCardio) {
+      return '<div class="log-row"><div><div class="log-name">' + escapeHtml(e.name) + '</div><div class="log-meta">' +
+        (e.distance != null ? e.distance + 'km' : '') + '</div></div><div class="log-stat"><div class="log-weight">' +
+        e.minutes + '<span>分</span></div></div></div>';
+    }
+    var prev = findPreviousEntry(e.name, e.date);
+    var deltaHtml = '';
+    if (prev && prev.weight != null) {
+      var d = e.weight - prev.weight;
+      if (d !== 0) {
+        var sign = d > 0 ? '▲' : '▼';
+        var cls = d > 0 ? 'delta' : 'delta down';
+        deltaHtml = '<div class="' + cls + '">' + sign + ' ' + Math.abs(d) + 'kg</div>';
+      }
+    }
+    return '<div class="log-row"><div><div class="log-name">' + escapeHtml(e.name) + '</div><div class="log-meta">' +
+      e.reps + '回 × ' + e.sets + 'セット</div></div><div class="log-stat"><div class="log-weight">' + e.weight +
+      '<span>kg</span></div>' + deltaHtml + '</div></div>';
+  }
+
+  function findPreviousEntry(name, beforeDate) {
+    var candidates = state.entries.filter(function (e) { return e.name === name && e.date < beforeDate && e.weight != null; });
+    if (!candidates.length) return null;
+    candidates.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    return candidates[0];
+  }
+
+  function renderTodayList() {
+    var heading = $('todayHeading');
+    var count = $('todayCount');
+    var list = $('todayList');
+    if (!state.activeCategory) {
+      heading.textContent = '本日の記録';
+      count.textContent = '';
+      list.innerHTML = '<p class="empty-note">部位を選ぶと本日の記録が表示されます。</p>';
+      return;
+    }
+    var today = todayStr();
+    var todays = state.entries.filter(function (e) { return e.date === today && e.category === state.activeCategory; });
+    heading.textContent = '本日の記録・' + state.activeCategory;
+    count.textContent = todays.length + '種目';
+    list.innerHTML = todays.length
+      ? todays.map(entryRowHtml).join('')
+      : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
+  }
+
+  function renderSuggestions() {
+    var dl = $('exerciseSuggestions');
+    var all = {};
+    Object.keys(state.dict).forEach(function (cat) {
+      (state.dict[cat] || []).forEach(function (w) { all[w] = true; });
+    });
+    dl.innerHTML = Object.keys(all).sort().map(function (w) { return '<option value="' + escapeHtml(w) + '"></option>'; }).join('');
+  }
+
+  // ---------------------------------------------------------------------
+  // add entry
+  // ---------------------------------------------------------------------
+  function handleAddEntry(ev) {
+    if (ev) ev.preventDefault();
+    var exerciseInput = $('exerciseName');
+    var nameVal = exerciseInput.value.trim();
+    if (!nameVal) { alert('種目名を入力してください'); exerciseInput.focus(); return; }
+
+    var addBtn = $('addEntryBtn');
+    var proceed = function (category) {
+      if (!category) {
+        alert('部位を自動判定できませんでした。上のピルから手動で選択してください。');
+        renderDetectHint();
+        return;
+      }
+      state.activeCategory = category;
+
+      var isCardio = category === '有酸素';
+      var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: todayStr(), category: category, name: nameVal, ts: Date.now() };
+
+      if (isCardio) {
+        var minutes = parseFloat($('inputMinutes').value);
+        var distance = parseFloat($('inputDistance').value);
+        if (!minutes || minutes <= 0) { alert('時間(分)を入力してください'); return; }
+        entry.minutes = minutes;
+        if (!isNaN(distance) && distance > 0) entry.distance = distance;
+      } else {
+        var weight = parseFloat($('inputWeight').value);
+        var reps = parseInt($('inputReps').value, 10);
+        var sets = parseInt($('inputSets').value, 10);
+        if (isNaN(weight) || weight < 0) { alert('重量を入力してください'); return; }
+        if (!reps || reps <= 0) { alert('回数を入力してください'); return; }
+        if (!sets || sets <= 0) { alert('セット数を入力してください'); return; }
+        entry.weight = weight; entry.reps = reps; entry.sets = sets;
+      }
+
+      state.entries.push(entry);
+      saveJSON(LS.entries, state.entries);
+
+      exerciseInput.value = '';
+      state.manualOverride = false;
+      selectCategory(category, 'idle');
+      renderHistory();
+      exerciseInput.focus();
+    };
+
+    var category = state.activeCategory || detectFromDict(nameVal);
+    if (category) { proceed(category); return; }
+
+    if (!state.settings.apiKey) { proceed(null); return; }
+
+    addBtn.disabled = true;
+    var prevLabel = addBtn.textContent;
+    addBtn.textContent = 'AI判定中…';
+    state.detectMode = 'loading';
+    renderDetectHint();
+
+    classifyWithAI(nameVal).then(function (cat) {
+      addBtn.disabled = false;
+      addBtn.textContent = prevLabel;
+      if (cat) {
+        learn(cat, nameVal);
+        state.activeCategory = cat;
+        state.detectMode = 'ai';
+        renderCategoryPills();
+        renderDetectHint();
+      }
+      proceed(cat);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // rendering — history screen
+  // ---------------------------------------------------------------------
+  function renderHistoryPills() {
+    var row = $('historyPills');
+    row.innerHTML = '';
+    ['すべて'].concat(state.categories).forEach(function (cat) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pill' + (cat === state.historyFilter ? ' active' : '');
+      btn.textContent = cat;
+      btn.addEventListener('click', function () {
+        state.historyFilter = cat;
+        renderHistoryPills();
+        renderHistory();
+      });
+      row.appendChild(btn);
+    });
+  }
+
+  function renderHistory() {
+    var container = $('historyList');
+    var dates = Array.from(new Set(state.entries.map(function (e) { return e.date; }))).sort(function (a, b) { return a < b ? 1 : -1; });
+    if (!dates.length) { container.innerHTML = '<p class="empty-note">まだ記録がありません。</p>'; return; }
+
+    var html = '';
+    var anyVisible = false;
+    dates.forEach(function (date) {
+      var dayEntries = state.entries.filter(function (e) { return e.date === date; });
+      if (state.historyFilter !== 'すべて') dayEntries = dayEntries.filter(function (e) { return e.category === state.historyFilter; });
+      if (!dayEntries.length) return;
+      anyVisible = true;
+
+      var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * e.sets; }, 0);
+      var cardioMin = dayEntries.filter(function (e) { return e.minutes != null; }).reduce(function (s, e) { return s + e.minutes; }, 0);
+      var cardioKm = dayEntries.filter(function (e) { return e.distance != null; }).reduce(function (s, e) { return s + e.distance; }, 0);
+      var volParts = [];
+      if (strengthVol > 0) volParts.push('総ボリューム ' + strengthVol.toLocaleString() + 'kg');
+      if (cardioMin > 0) volParts.push('有酸素 ' + cardioMin + '分' + (cardioKm > 0 ? ' ・ ' + cardioKm.toFixed(1) + 'km' : ''));
+
+      var cats = Array.from(new Set(dayEntries.map(function (e) { return e.category; })));
+      html += '<div class="day-group"><div class="day-header"><div><span class="date">' + formatDateLabel(date) + '</span>' +
+        cats.map(function (c) { return '<span class="part-tag">' + escapeHtml(c) + '</span>'; }).join('') +
+        '</div><span class="volume">' + (volParts.join(' ・ ') || '—') + '</span></div>' +
+        '<div class="log-list">' + dayEntries.map(entryRowHtml).join('') + '</div></div>';
+    });
+    container.innerHTML = anyVisible ? html : '<p class="empty-note">該当する記録がありません。</p>';
+  }
+
+  // ---------------------------------------------------------------------
+  // feedback
+  // ---------------------------------------------------------------------
+  var MODEL_LABELS = {
+    'claude-opus-4-8': 'Claude Opus 4.8',
+    'claude-sonnet-5': 'Claude Sonnet 5',
+    'claude-haiku-4-5': 'Claude Haiku 4.5'
+  };
+
+  function renderFeedbackLoading() {
+    $('feedbackArea').innerHTML = '<div class="card" style="text-align:center; padding:32px 16px;">' +
+      '<div class="spinner"></div><p style="margin-top:12px;color:var(--text-muted);font-size:13px;">Claudeが本日の記録を分析しています…</p></div>';
+  }
+
+  function showFeedbackError(msg) {
+    $('feedbackArea').innerHTML = '<div class="card"><p style="color:var(--accent); font-size:13px; line-height:1.6; margin:0 0 12px;">' +
+      escapeHtml(msg) + '</p><button class="btn btn-primary" id="fbRetryBtn" type="button">フィードバックを生成</button></div>';
+    $('fbRetryBtn').addEventListener('click', generateFeedback);
+  }
+
+  function renderFeedback() {
+    var area = $('feedbackArea');
+    if (!state.lastFeedback) {
+      area.innerHTML = '<div class="card" style="text-align:center; padding:28px 16px;">' +
+        '<p style="color:var(--text-muted); font-size:13px; margin:0 0 14px;">本日の記録をもとに、Claudeがフィードバックします。</p>' +
+        '<button class="btn btn-primary" id="fbGenBtn" type="button">フィードバックを生成</button></div>';
+      $('fbGenBtn').addEventListener('click', generateFeedback);
+      return;
+    }
+    var fb = state.lastFeedback;
+    var data = fb.data;
+    var modelLabel = MODEL_LABELS[fb.model] || fb.model;
+    area.innerHTML =
+      '<div class="feedback-card">' +
+      '<div class="stamp">承</div>' +
+      '<div class="fb-meta">' + escapeHtml(modelLabel) + ' · ' + formatRelativeTime(fb.generatedAt) + ' · ' + fb.count + '種目を分析</div>' +
+      '<div class="fb-summary">' + escapeHtml(data.summary) + '</div>' +
+      '<div class="fb-block"><h4 class="good">◎ 良かった点</h4><ul>' + data.good.map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('') + '</ul></div>' +
+      '<div class="fb-block"><h4 class="improve">△ 改善点</h4><ul>' + data.improve.map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('') + '</ul></div>' +
+      '<div class="fb-next"><h4>次回への提案</h4><p>' + escapeHtml(data.next) + '</p></div>' +
+      '</div>' +
+      '<button class="btn btn-outline" id="fbRegenBtn" type="button" style="margin-top:14px;">↻ もう一度リクエスト</button>';
+    $('fbRegenBtn').addEventListener('click', generateFeedback);
+  }
+
+  function generateFeedback() {
+    if (!state.settings.apiKey) { showFeedbackError('APIキーが未設定です。設定画面から登録してください。'); openSettings(); return; }
+    var today = todayStr();
+    var todays = state.entries.filter(function (e) { return e.date === today; });
+    if (!todays.length) { showFeedbackError('本日の記録がまだありません。まずは記録画面から種目を追加してください。'); return; }
+
+    renderFeedbackLoading();
+
+    var lines = todays.map(function (e) {
+      if (e.minutes !== undefined) {
+        return '・[' + e.category + '] ' + e.name + ' ' + e.minutes + '分' + (e.distance ? ' / ' + e.distance + 'km' : '');
+      }
+      var prev = findPreviousEntry(e.name, today);
+      var deltaText = '';
+      if (prev && prev.weight != null) {
+        var d = e.weight - prev.weight;
+        deltaText = '(前回 ' + prev.weight + 'kg からの変化: ' + (d >= 0 ? '+' : '') + d + 'kg)';
+      }
+      return '・[' + e.category + '] ' + e.name + ' ' + e.weight + 'kg × ' + e.reps + '回 × ' + e.sets + 'セット ' + deltaText;
+    });
+
+    var userContent = '本日(' + formatDateLabel(today) + ')のトレーニング記録:\n' + lines.join('\n');
+    var system = 'あなたは経験豊富なパーソナルトレーナーです。ユーザーの筋トレ記録を分析し、日本語で具体的かつ簡潔なフィードバックを行います。専門的だが親しみやすい口調で、数値の変化に着目してください。';
+    var schema = {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: '全体の総評。2〜3文。' },
+        good: { type: 'array', items: { type: 'string' }, description: '良かった点。2〜4個。' },
+        improve: { type: 'array', items: { type: 'string' }, description: '改善点。1〜3個。' },
+        next: { type: 'string', description: '次回トレーニングへの具体的な提案。' }
+      },
+      required: ['summary', 'good', 'improve', 'next'],
+      additionalProperties: false
+    };
+
+    callClaude({
+      apiKey: state.settings.apiKey,
+      model: state.settings.model,
+      system: system,
+      messages: [{ role: 'user', content: userContent }],
+      maxTokens: 1500,
+      outputFormat: { type: 'json_schema', schema: schema }
+    }).then(function (text) {
+      var data = JSON.parse(text);
+      state.lastFeedback = { data: data, generatedAt: Date.now(), model: state.settings.model, count: todays.length };
+      saveJSON(LS.feedback, state.lastFeedback);
+      renderFeedback();
+    }).catch(function (e) {
+      showFeedbackError('フィードバックの取得に失敗しました: ' + e.message);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // settings
+  // ---------------------------------------------------------------------
+  function openSettings() {
+    $('apiKeyInput').value = state.settings.apiKey;
+    $('modelSelect').value = state.settings.model;
+    $('settingsOverlay').classList.add('open');
+  }
+  function closeSettings() { $('settingsOverlay').classList.remove('open'); }
+
+  $('settingsBtn').addEventListener('click', openSettings);
+  $('closeSettingsBtn').addEventListener('click', closeSettings);
+  $('toggleKeyVisBtn').addEventListener('click', function () {
+    var input = $('apiKeyInput');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
+  $('saveSettingsBtn').addEventListener('click', function () {
+    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value };
+    saveJSON(LS.settings, state.settings);
+    closeSettings();
+    showToast('設定を保存しました');
+  });
+
+  // ---------------------------------------------------------------------
+  // screen switching
+  // ---------------------------------------------------------------------
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(function (el) { el.classList.toggle('active', el.id === 'screen-' + name); });
+    document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.target === name); });
+  }
+  document.querySelectorAll('.nav-item').forEach(function (btn) {
+    btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
+  });
+  $('gotoFeedbackBtn').addEventListener('click', function () { showScreen('feedback'); generateFeedback(); });
+
+  // ---------------------------------------------------------------------
+  // exercise-name input: live dict match + AI on blur
+  // ---------------------------------------------------------------------
+  var exerciseInput = $('exerciseName');
+  exerciseInput.addEventListener('input', function () {
+    if (state.manualOverride) return;
+    var val = exerciseInput.value;
+    if (!val.trim()) { state.detectMode = 'idle'; renderDetectHint(); return; }
+    var cat = detectFromDict(val);
+    if (cat) selectCategory(cat, 'dict');
+    else { state.detectMode = 'idle'; renderDetectHint(); }
+  });
+  exerciseInput.addEventListener('blur', function () {
+    var val = exerciseInput.value.trim();
+    if (!val || state.manualOverride) return;
+    if (detectFromDict(val)) return;
+    if (!state.settings.apiKey) return;
+    state.detectMode = 'loading';
+    renderDetectHint();
+    classifyWithAI(val).then(function (cat) {
+      if (exerciseInput.value.trim() !== val) return; // text changed meanwhile
+      if (cat) {
+        learn(cat, val);
+        selectCategory(cat, 'ai');
+      } else {
+        state.detectMode = 'idle';
+        renderDetectHint();
+      }
+    });
+  });
+  $('addForm').addEventListener('submit', handleAddEntry);
+
+  // ---------------------------------------------------------------------
+  // add custom body-part category
+  // ---------------------------------------------------------------------
+  $('addCategoryPill').addEventListener('click', function () {
+    var name = window.prompt('追加する部位名を入力してください(例：腹筋)');
+    if (!name) return;
+    var trimmed = name.trim();
+    if (!trimmed) return;
+    if (state.categories.indexOf(trimmed) === -1) {
+      state.categories.push(trimmed);
+      state.dict[trimmed] = state.dict[trimmed] || [];
+      saveJSON(LS.categories, state.categories);
+      saveJSON(LS.dict, state.dict);
+      renderHistoryPills();
+    }
+    selectCategory(trimmed, 'manual');
+  });
+
+  // ---------------------------------------------------------------------
+  // init
+  // ---------------------------------------------------------------------
+  function init() {
+    renderCategoryPills();
+    renderHistoryPills();
+    renderSuggestions();
+    selectCategory(state.categories[0], 'idle');
+    renderHistory();
+    renderFeedback();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
