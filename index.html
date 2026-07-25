@@ -184,6 +184,22 @@
   .delta { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 800; color: var(--success); background: var(--success-soft); padding: 2px 6px; border-radius: 999px; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .delta.down { color: var(--text-muted); background: var(--surface-2); }
 
+  .exercise-group { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .exercise-header {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; background: none; border: none; font: inherit; color: inherit; cursor: pointer; text-align: left;
+  }
+  .exercise-header .eh-main { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .exercise-header .chevron { width: 16px; height: 16px; color: var(--text-faint); transition: transform 0.2s ease; flex-shrink: 0; }
+  .exercise-group.expanded .chevron { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { .exercise-header .chevron { transition: none; } }
+  .exercise-sets { display: none; flex-direction: column; border-top: 1px solid var(--border); }
+  .exercise-group.expanded .exercise-sets { display: flex; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px 9px 30px; font-size: 12.5px; }
+  .set-row:not(:last-child) { border-bottom: 1px dashed var(--border); }
+  .set-row .set-idx { color: var(--text-faint); font-weight: 700; }
+  .set-row .set-val { font-variant-numeric: tabular-nums; font-weight: 700; }
+
   .cta-bar { position: sticky; bottom: 0; background: linear-gradient(to top, var(--bg) 65%, transparent); padding-top: 14px; margin-top: -4px; }
 
   .day-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
@@ -280,10 +296,9 @@
           <datalist id="exerciseSuggestions"></datalist>
         </div>
 
-        <div class="field-trio" id="trio-strength">
+        <div class="field-trio two-col" id="trio-strength">
           <div class="field"><label>重量 (kg)</label><input type="number" id="inputWeight" step="0.5" min="0" inputmode="decimal"></div>
           <div class="field"><label>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
-          <div class="field"><label>セット</label><input type="number" id="inputSets" min="1" inputmode="numeric"></div>
         </div>
 
         <div class="field-trio two-col" id="trio-cardio" style="display:none">
@@ -294,7 +309,7 @@
         <div class="detect-hint" id="detectHint">種目名を入力すると部位を自動判定します</div>
       </div>
       <div style="height:12px"></div>
-      <button class="btn btn-primary" type="submit" id="addEntryBtn">＋ 記録に追加</button>
+      <button class="btn btn-primary" type="submit" id="addEntryBtn">＋ セットを追加</button>
     </form>
 
     <div>
@@ -671,33 +686,80 @@
     renderTodayList();
   }
 
-  function entryRowHtml(e) {
-    var isCardio = e.minutes !== undefined;
-    if (isCardio) {
-      return '<div class="log-row"><div><div class="log-name">' + escapeHtml(e.name) + '</div><div class="log-meta">' +
-        (e.distance != null ? e.distance + 'km' : '') + '</div></div><div class="log-stat"><div class="log-weight">' +
-        e.minutes + '<span>分</span></div></div></div>';
-    }
-    var prev = findPreviousEntry(e.name, e.date);
-    var deltaHtml = '';
-    if (prev && prev.weight != null) {
-      var d = e.weight - prev.weight;
-      if (d !== 0) {
-        var sign = d > 0 ? '▲' : '▼';
-        var cls = d > 0 ? 'delta' : 'delta down';
-        deltaHtml = '<div class="' + cls + '">' + sign + ' ' + Math.abs(d) + 'kg</div>';
-      }
-    }
-    return '<div class="log-row"><div><div class="log-name">' + escapeHtml(e.name) + '</div><div class="log-meta">' +
-      e.reps + '回 × ' + e.sets + 'セット</div></div><div class="log-stat"><div class="log-weight">' + e.weight +
-      '<span>kg</span></div>' + deltaHtml + '</div></div>';
+  // Each strength entry is a single set (weight × reps). Same exercise/day
+  // entries are grouped together and shown as a collapsible "exercise" card
+  // with one row per set. (Older entries may still carry a `sets` count from
+  // before this was per-set — those render as one row showing that count.)
+  function groupEntriesByName(entries) {
+    var order = [];
+    var groups = {};
+    entries.forEach(function (e) {
+      if (!groups[e.name]) { groups[e.name] = []; order.push(e.name); }
+      groups[e.name].push(e);
+    });
+    return order.map(function (name) { return { name: name, items: groups[name] }; });
   }
 
-  function findPreviousEntry(name, beforeDate) {
+  function findPreviousTopWeight(name, beforeDate) {
     var candidates = state.entries.filter(function (e) { return e.name === name && e.date < beforeDate && e.weight != null; });
     if (!candidates.length) return null;
-    candidates.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-    return candidates[0];
+    var latestDate = candidates.reduce(function (max, e) { return e.date > max ? e.date : max; }, candidates[0].date);
+    var sameDate = candidates.filter(function (e) { return e.date === latestDate; });
+    return Math.max.apply(null, sameDate.map(function (e) { return e.weight; }));
+  }
+
+  function exerciseGroupHtml(group, opts) {
+    opts = opts || {};
+    var items = group.items;
+    var isCardio = items[0].minutes !== undefined;
+    var expanded = opts.defaultExpanded ? ' expanded' : '';
+
+    var statHtml, setsHtml;
+    if (isCardio) {
+      var totalMin = items.reduce(function (s, e) { return s + e.minutes; }, 0);
+      statHtml = '<div class="log-stat"><div class="log-weight">' + totalMin + '<span>分</span></div></div>';
+      setsHtml = items.map(function (e, i) {
+        return '<div class="set-row"><span class="set-idx">' + (i + 1) + '回目</span><span class="set-val">' +
+          e.minutes + '分' + (e.distance != null ? ' ・ ' + e.distance + 'km' : '') + '</span></div>';
+      }).join('');
+    } else {
+      var topWeight = Math.max.apply(null, items.map(function (e) { return e.weight; }));
+      var deltaHtml = '';
+      if (opts.compareDate) {
+        var prevTop = findPreviousTopWeight(group.name, opts.compareDate);
+        if (prevTop != null) {
+          var d = topWeight - prevTop;
+          if (d !== 0) {
+            var sign = d > 0 ? '▲' : '▼';
+            var cls = d > 0 ? 'delta' : 'delta down';
+            deltaHtml = '<div class="' + cls + '">' + sign + ' ' + Math.abs(d) + 'kg</div>';
+          }
+        }
+      }
+      statHtml = '<div class="log-stat"><div class="log-weight">' + topWeight + '<span>kg</span></div>' + deltaHtml + '</div>';
+      setsHtml = items.map(function (e, i) {
+        var setsCount = e.sets || 1;
+        return '<div class="set-row"><span class="set-idx">' + (i + 1) + 'セット目</span><span class="set-val">' +
+          e.weight + 'kg × ' + e.reps + '回' + (setsCount > 1 ? ' × ' + setsCount + 'セット' : '') + '</span></div>';
+      }).join('');
+    }
+
+    return '<div class="exercise-group' + expanded + '">' +
+      '<button type="button" class="exercise-header">' +
+        '<div class="eh-main"><div><div class="log-name">' + escapeHtml(group.name) + '</div><div class="log-meta">' +
+        items.length + (isCardio ? '回' : 'セット') + '</div></div>' + statHtml + '</div>' +
+        '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+      '</button>' +
+      '<div class="exercise-sets">' + setsHtml + '</div>' +
+    '</div>';
+  }
+
+  function bindExerciseGroupToggle(containerEl) {
+    containerEl.addEventListener('click', function (ev) {
+      var header = ev.target.closest('.exercise-header');
+      if (!header) return;
+      header.closest('.exercise-group').classList.toggle('expanded');
+    });
   }
 
   function renderTodayList() {
@@ -712,10 +774,11 @@
     }
     var today = todayStr();
     var todays = state.entries.filter(function (e) { return e.date === today && e.category === state.activeCategory; });
+    var groups = groupEntriesByName(todays);
     heading.textContent = '本日の記録・' + state.activeCategory;
-    count.textContent = todays.length + '種目';
-    list.innerHTML = todays.length
-      ? todays.map(entryRowHtml).join('')
+    count.textContent = groups.length + '種目';
+    list.innerHTML = groups.length
+      ? groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: today }); }).join('')
       : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
   }
 
@@ -758,11 +821,9 @@
       } else {
         var weight = parseFloat($('inputWeight').value);
         var reps = parseInt($('inputReps').value, 10);
-        var sets = parseInt($('inputSets').value, 10);
         if (isNaN(weight) || weight < 0) { alert('重量を入力してください'); return; }
         if (!reps || reps <= 0) { alert('回数を入力してください'); return; }
-        if (!sets || sets <= 0) { alert('セット数を入力してください'); return; }
-        entry.weight = weight; entry.reps = reps; entry.sets = sets;
+        entry.weight = weight; entry.reps = reps;
       }
 
       if (cloudHooks) {
@@ -772,11 +833,18 @@
         saveJSON(LS.entries, state.entries);
       }
 
-      exerciseInput.value = '';
-      state.manualOverride = false;
-      selectCategory(category, 'idle');
+      if (isCardio) {
+        exerciseInput.value = '';
+        state.manualOverride = false;
+        selectCategory(category, 'idle');
+        exerciseInput.focus();
+      } else {
+        // keep the exercise name + weight/reps so the next set of the same
+        // exercise can be logged fast — just tweak the weight and add again.
+        renderTodayList();
+        $('inputWeight').focus();
+      }
       renderHistory();
-      exerciseInput.focus();
     };
 
     var category = state.activeCategory || detectFromDict(nameVal);
@@ -837,7 +905,7 @@
       if (!dayEntries.length) return;
       anyVisible = true;
 
-      var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * e.sets; }, 0);
+      var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * (e.sets || 1); }, 0);
       var cardioMin = dayEntries.filter(function (e) { return e.minutes != null; }).reduce(function (s, e) { return s + e.minutes; }, 0);
       var cardioKm = dayEntries.filter(function (e) { return e.distance != null; }).reduce(function (s, e) { return s + e.distance; }, 0);
       var volParts = [];
@@ -845,10 +913,11 @@
       if (cardioMin > 0) volParts.push('有酸素 ' + cardioMin + '分' + (cardioKm > 0 ? ' ・ ' + cardioKm.toFixed(1) + 'km' : ''));
 
       var cats = Array.from(new Set(dayEntries.map(function (e) { return e.category; })));
+      var dayGroups = groupEntriesByName(dayEntries);
       html += '<div class="day-group"><div class="day-header"><div><span class="date">' + formatDateLabel(date) + '</span>' +
         cats.map(function (c) { return '<span class="part-tag">' + escapeHtml(c) + '</span>'; }).join('') +
         '</div><span class="volume">' + (volParts.join(' ・ ') || '—') + '</span></div>' +
-        '<div class="log-list">' + dayEntries.map(entryRowHtml).join('') + '</div></div>';
+        '<div class="log-list">' + dayGroups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: false, compareDate: date }); }).join('') + '</div></div>';
     });
     container.innerHTML = anyVisible ? html : '<p class="empty-note">該当する記録がありません。</p>';
   }
@@ -906,17 +975,24 @@
 
     renderFeedbackLoading();
 
-    var lines = todays.map(function (e) {
-      if (e.minutes !== undefined) {
-        return '・[' + e.category + '] ' + e.name + ' ' + e.minutes + '分' + (e.distance ? ' / ' + e.distance + 'km' : '');
-      }
-      var prev = findPreviousEntry(e.name, today);
+    var strengthEntries = todays.filter(function (e) { return e.minutes === undefined; });
+    var cardioEntries = todays.filter(function (e) { return e.minutes !== undefined; });
+    var lines = groupEntriesByName(strengthEntries).map(function (g) {
+      var setsText = g.items.map(function (e) {
+        var setsCount = e.sets || 1;
+        return e.weight + 'kg×' + e.reps + '回' + (setsCount > 1 ? '×' + setsCount + 'セット' : '');
+      }).join(', ');
+      var topWeight = Math.max.apply(null, g.items.map(function (e) { return e.weight; }));
+      var prevTop = findPreviousTopWeight(g.name, today);
       var deltaText = '';
-      if (prev && prev.weight != null) {
-        var d = e.weight - prev.weight;
-        deltaText = '(前回 ' + prev.weight + 'kg からの変化: ' + (d >= 0 ? '+' : '') + d + 'kg)';
+      if (prevTop != null) {
+        var d = topWeight - prevTop;
+        deltaText = '(前回トップ ' + prevTop + 'kgからの変化: ' + (d >= 0 ? '+' : '') + d + 'kg)';
       }
-      return '・[' + e.category + '] ' + e.name + ' ' + e.weight + 'kg × ' + e.reps + '回 × ' + e.sets + 'セット ' + deltaText;
+      return '・[' + g.items[0].category + '] ' + g.name + ': ' + setsText + ' ' + deltaText;
+    });
+    cardioEntries.forEach(function (e) {
+      lines.push('・[' + e.category + '] ' + e.name + ' ' + e.minutes + '分' + (e.distance ? ' / ' + e.distance + 'km' : ''));
     });
 
     var userContent = '本日(' + formatDateLabel(today) + ')のトレーニング記録:\n' + lines.join('\n');
@@ -1082,6 +1158,11 @@
     });
   });
   $('addForm').addEventListener('submit', handleAddEntry);
+
+  // one-time delegated listeners for expanding/collapsing exercise groups
+  // (their contents are re-rendered via innerHTML, so bind on the stable container)
+  bindExerciseGroupToggle($('todayList'));
+  bindExerciseGroupToggle($('historyList'));
 
   // ---------------------------------------------------------------------
   // add custom body-part category
