@@ -112,6 +112,14 @@
     display: flex; align-items: center; justify-content: center;
     color: var(--text-muted); flex-shrink: 0; cursor: pointer;
   }
+  .auth-badge {
+    font-size: 10.5px; font-weight: 700; color: var(--text-faint);
+    padding: 5px 10px; border-radius: 999px; background: var(--surface-2);
+    border: 1px solid var(--border); white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .auth-badge.signed-in { color: var(--success); background: var(--success-soft); border-color: transparent; }
+  .auth-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 
   .screen {
     flex: 1; overflow-y: auto; padding: 16px 20px 24px;
@@ -141,11 +149,12 @@
   .field-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
-  .field input, .field select {
+  .field input, .field select, .field textarea {
     font: inherit; background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 14.5px; width: 100%;
   }
-  .field input::placeholder { color: var(--text-faint); }
+  .field textarea { resize: vertical; min-height: 70px; }
+  .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
   .field-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .field-trio.two-col { grid-template-columns: 1fr 1fr; }
 
@@ -243,9 +252,12 @@
         <div class="brand-sub">TETSU LOG</div>
       </div>
     </div>
-    <button class="icon-btn" id="settingsBtn" type="button" aria-label="設定">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    </button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="auth-badge" id="authHeaderBadge">ゲスト</div>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="設定">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
   </div>
 
   <!-- ===== 記録 ===== -->
@@ -317,6 +329,54 @@
     <div id="feedbackArea"></div>
   </section>
 
+  <!-- ===== マイページ ===== -->
+  <section class="screen" id="screen-mypage">
+    <div>
+      <h2 class="screen-title">マイページ</h2>
+      <p class="screen-desc">体重や目的を記録しておけます。ログイン中はクラウドに同期されます。</p>
+    </div>
+
+    <div class="card" id="bmiCard" style="display:none">
+      <span class="card-label">BMI</span>
+      <div class="log-row" style="border:none; padding:0; background:none;">
+        <div>
+          <div class="log-name" id="bmiCategory"></div>
+        </div>
+        <div class="log-stat"><div class="log-weight" id="bmiValue"></div></div>
+      </div>
+    </div>
+
+    <form class="card" id="myPageForm">
+      <span class="card-label">基本情報</span>
+      <div class="field-row">
+        <div class="field-trio">
+          <div class="field"><label>体重 (kg)</label><input type="number" id="mpWeight" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>身長 (cm)</label><input type="number" id="mpHeight" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>年齢</label><input type="number" id="mpAge" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="field">
+          <label for="mpFrequency">トレーニング頻度(週あたり)</label>
+          <input type="number" id="mpFrequency" min="0" max="14" inputmode="numeric" placeholder="例）3">
+        </div>
+        <div class="field">
+          <label>目的</label>
+          <div class="pillrow" id="goalPills">
+            <button class="pill" type="button" data-goal="筋肥大">筋肥大</button>
+            <button class="pill" type="button" data-goal="減量">減量</button>
+            <button class="pill" type="button" data-goal="健康維持">健康維持</button>
+            <button class="pill" type="button" data-goal="パフォーマンス向上">パフォーマンス向上</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="mpNote">メモ(任意)</label>
+          <textarea id="mpNote" rows="3" placeholder="怪我の既往、こだわりなど自由に"></textarea>
+        </div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="btn btn-primary" type="submit">保存する</button>
+    </form>
+  </section>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-target="record" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
@@ -329,6 +389,10 @@
     <button class="nav-item" data-target="feedback" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
       <span>フィードバック</span>
+    </button>
+    <button class="nav-item" data-target="mypage" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span>マイページ</span>
     </button>
   </div>
 
@@ -385,7 +449,8 @@
     categories: 'tetsulog_categories',
     dict: 'tetsulog_dict',
     settings: 'tetsulog_settings',
-    feedback: 'tetsulog_last_feedback'
+    feedback: 'tetsulog_last_feedback',
+    myPage: 'tetsulog_mypage'
   };
 
   function loadJSON(key, fallback) {
@@ -407,6 +472,7 @@
     '脚': ['スクワット', 'フロントスクワット', 'レッグプレス', 'レッグカール', 'レッグエクステンション', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ', 'ヒップスラスト', 'ハムストリングカール', 'アダクション', 'アブダクション'],
     '有酸素': ['ランニング', 'ジョギング', 'ウォーキング', 'エアロバイク', 'バイク', 'トレッドミル', '水泳', 'スイミング', 'HIIT', 'ローイングマシン', '縄跳び', 'サイクリング', 'エリプティカル']
   };
+  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '' };
 
   var state = {
     entries: loadJSON(LS.entries, []),
@@ -417,7 +483,8 @@
     manualOverride: false,
     detectMode: 'idle', // idle | dict | ai | manual | loading
     historyFilter: 'すべて',
-    lastFeedback: loadJSON(LS.feedback, null)
+    lastFeedback: loadJSON(LS.feedback, null),
+    myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)))
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
 
@@ -885,6 +952,70 @@
   }
 
   // ---------------------------------------------------------------------
+  // mypage
+  // ---------------------------------------------------------------------
+  function calcBmi(weight, height) {
+    if (!weight || !height) return null;
+    var h = height / 100;
+    if (h <= 0) return null;
+    return weight / (h * h);
+  }
+  function bmiCategoryLabel(bmi) {
+    if (bmi < 18.5) return '低体重';
+    if (bmi < 25) return '普通体重';
+    if (bmi < 30) return '肥満(1度)';
+    if (bmi < 35) return '肥満(2度)';
+    return '肥満(3度以上)';
+  }
+
+  function renderMyPage() {
+    var mp = state.myPage || DEFAULT_MYPAGE;
+    $('mpWeight').value = mp.weight != null ? mp.weight : '';
+    $('mpHeight').value = mp.height != null ? mp.height : '';
+    $('mpAge').value = mp.age != null ? mp.age : '';
+    $('mpFrequency').value = mp.frequency != null ? mp.frequency : '';
+    $('mpNote').value = mp.note || '';
+    document.querySelectorAll('#goalPills .pill').forEach(function (p) {
+      p.classList.toggle('active', p.dataset.goal === mp.goal);
+    });
+
+    var bmi = calcBmi(mp.weight, mp.height);
+    var bmiCard = $('bmiCard');
+    if (bmi) {
+      bmiCard.style.display = 'block';
+      $('bmiValue').textContent = bmi.toFixed(1);
+      $('bmiCategory').textContent = bmiCategoryLabel(bmi);
+    } else {
+      bmiCard.style.display = 'none';
+    }
+  }
+
+  document.querySelectorAll('#goalPills .pill').forEach(function (p) {
+    p.addEventListener('click', function () {
+      var wasActive = p.classList.contains('active');
+      document.querySelectorAll('#goalPills .pill').forEach(function (x) { x.classList.remove('active'); });
+      if (!wasActive) p.classList.add('active');
+    });
+  });
+
+  $('myPageForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var selectedGoalEl = document.querySelector('#goalPills .pill.active');
+    state.myPage = {
+      weight: parseFloat($('mpWeight').value) || null,
+      height: parseFloat($('mpHeight').value) || null,
+      age: parseInt($('mpAge').value, 10) || null,
+      frequency: parseInt($('mpFrequency').value, 10) || null,
+      goal: selectedGoalEl ? selectedGoalEl.dataset.goal : null,
+      note: $('mpNote').value.trim()
+    };
+    saveJSON(LS.myPage, state.myPage);
+    if (cloudHooks) cloudHooks.writeProfile();
+    renderMyPage();
+    showToast('マイページを保存しました');
+  });
+
+  // ---------------------------------------------------------------------
   // settings
   // ---------------------------------------------------------------------
   function openSettings() {
@@ -980,6 +1111,7 @@
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
     state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' });
     state.lastFeedback = loadJSON(LS.feedback, null);
+    state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
@@ -989,6 +1121,7 @@
     selectCategory(state.categories[0], 'idle');
     renderHistory();
     renderFeedback();
+    renderMyPage();
   }
 
   function init() {
@@ -998,6 +1131,7 @@
     selectCategory(state.categories[0], 'idle');
     renderHistory();
     renderFeedback();
+    renderMyPage();
   }
   init();
 
@@ -1020,6 +1154,7 @@
       if (profile.dict) state.dict = profile.dict;
       if (profile.settings) state.settings = profile.settings;
       if (profile.lastFeedback !== undefined) state.lastFeedback = profile.lastFeedback;
+      if (profile.myPage) state.myPage = profile.myPage;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
       renderCategoryPills();
       renderHistoryPills();
@@ -1030,6 +1165,7 @@
         renderTodayList();
       }
       renderFeedback();
+      renderMyPage();
     },
     reloadFromLocal: reloadFromLocal
   };
@@ -1098,15 +1234,27 @@
   function updateAuthUI() {
     var signedOutEl = document.getElementById('authSignedOut');
     var signedInEl = document.getElementById('authSignedIn');
-    if (!signedOutEl || !signedInEl) return;
+    var headerBadge = document.getElementById('authHeaderBadge');
     if (cloudUser) {
-      signedOutEl.style.display = 'none';
-      signedInEl.style.display = 'block';
+      if (signedOutEl) signedOutEl.style.display = 'none';
+      if (signedInEl) signedInEl.style.display = 'block';
       var emailEl = document.getElementById('authUserEmail');
       if (emailEl) emailEl.textContent = cloudUser.email || cloudUser.displayName || 'ログイン中';
+      if (headerBadge) {
+        headerBadge.classList.add('signed-in');
+        headerBadge.title = cloudUser.email || '';
+        headerBadge.innerHTML = cloudUser.photoURL
+          ? '<img class="auth-avatar" src="' + cloudUser.photoURL + '" alt="">同期中'
+          : '● ログイン中';
+      }
     } else {
-      signedOutEl.style.display = 'block';
-      signedInEl.style.display = 'none';
+      if (signedOutEl) signedOutEl.style.display = 'block';
+      if (signedInEl) signedInEl.style.display = 'none';
+      if (headerBadge) {
+        headerBadge.classList.remove('signed-in');
+        headerBadge.title = '';
+        headerBadge.textContent = 'ゲスト';
+      }
     }
   }
 
@@ -1117,7 +1265,8 @@
       categories: s.categories,
       dict: s.dict,
       settings: s.settings,
-      lastFeedback: s.lastFeedback
+      lastFeedback: s.lastFeedback,
+      myPage: s.myPage
     }, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
   }
 
@@ -1148,7 +1297,8 @@
           categories: local.categories,
           dict: local.dict,
           settings: local.settings,
-          lastFeedback: local.lastFeedback
+          lastFeedback: local.lastFeedback,
+          myPage: local.myPage
         });
         var localEntries = local.entries.slice();
         for (var i = 0; i < localEntries.length; i++) {
