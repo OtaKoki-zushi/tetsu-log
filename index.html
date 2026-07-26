@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>鉄ログ — 筋トレ記録 & AIフィードバック</title>
+<title>KOKI'S LOG — 筋トレ記録 & AIフィードバック</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -98,20 +98,14 @@
     border-bottom: 1px solid var(--border);
   }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .brand-mark {
-    width: 34px; height: 34px; border-radius: 10px;
-    background: var(--accent); color: var(--accent-ink);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 19px; line-height: 1; flex-shrink: 0;
-  }
   .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
-  .brand-sub { font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.06em; margin-top: 1px; }
   .icon-btn {
     width: 36px; height: 36px; border-radius: 10px;
     border: 1px solid var(--border); background: var(--surface);
     display: flex; align-items: center; justify-content: center;
     color: var(--text-muted); flex-shrink: 0; cursor: pointer;
   }
+  .icon-btn.active { color: var(--accent); border-color: var(--accent); }
   .auth-badge {
     font-size: 10.5px; font-weight: 700; color: var(--text-faint);
     padding: 5px 10px; border-radius: 999px; background: var(--surface-2);
@@ -253,13 +247,22 @@
   .rest-timer-presets .pill { font-size: 11.5px; padding: 6px 12px; }
   .rest-timer-presets .pill.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
-  .heatmap { display: flex; gap: 3px; overflow-x: auto; padding: 2px; }
-  .heat-col { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
-  .heat-cell { width: 11px; height: 11px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border); }
-  .heat-cell.future { background: transparent; border-color: transparent; }
-  .heat-cell.level-1 { background: var(--accent-soft); border-color: transparent; }
-  .heat-cell.level-2 { background: var(--accent); opacity: 0.55; border-color: transparent; }
-  .heat-cell.level-3 { background: var(--accent); border-color: transparent; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-nav .icon-btn { width: 30px; height: 30px; font-size: 15px; font-weight: 800; }
+  .cal-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .cal-month-label { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10.5px; color: var(--text-faint); font-weight: 700; margin-bottom: 4px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-cell {
+    appearance: none; border: 1.5px solid transparent; background: none; border-radius: 10px; font: inherit; color: var(--text); cursor: pointer;
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0;
+  }
+  .cal-cell.empty { visibility: hidden; cursor: default; }
+  .cal-cell.future { color: var(--text-faint); cursor: default; }
+  .cal-cell.today { border-color: var(--accent); }
+  .cal-cell.has-entry { background: var(--accent-soft); }
+  .cal-daynum { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cal-check { font-size: 9px; color: var(--accent); font-weight: 800; line-height: 1; }
 
   .pr-badge { font-size: 10.5px; margin-right: 2px; }
   .chart-btn {
@@ -287,6 +290,7 @@
     display: none; flex-direction: column;
   }
   .settings-overlay.open { display: flex; }
+  #chartOverlay { z-index: 51; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
@@ -309,11 +313,10 @@
 <div class="app" id="app">
   <div class="app-header">
     <div class="brand">
-      <div class="brand-mark">🦍</div>
-      <div>
-        <div class="brand-name">鉄ログ</div>
-        <div class="brand-sub">TETSU LOG</div>
-      </div>
+      <button class="icon-btn" id="mypageBtn" type="button" aria-label="マイページ">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </button>
+      <div class="brand-name">KOKI'S LOG</div>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
       <div class="auth-badge" id="authHeaderBadge">ゲスト</div>
@@ -402,7 +405,7 @@
 
     <div class="card">
       <span class="card-label">トレーニング日数</span>
-      <div class="heatmap" id="trainingHeatmap"></div>
+      <div id="trainingCalendar"></div>
     </div>
 
     <div class="pillrow" id="historyPills"></div>
@@ -543,10 +546,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
       <span>フィードバック</span>
     </button>
-    <button class="nav-item" data-target="mypage" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-      <span>マイページ</span>
-    </button>
   </div>
 
   <!-- ===== 設定 ===== -->
@@ -602,6 +601,16 @@
       <div style="width:36px"></div>
     </div>
     <div class="settings-body" id="chartBody"></div>
+  </div>
+
+  <!-- ===== 日別のトレーニング内容 ===== -->
+  <div class="settings-overlay" id="dayDetailOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeDayDetailBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2 id="dayDetailTitle">日付</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body" id="dayDetailBody"></div>
   </div>
 </div>
 
@@ -908,6 +917,7 @@
       saveJSON(LS.entries, state.entries);
       renderTodayList();
       renderHistory();
+      refreshDayDetailIfOpen();
     }
   }
 
@@ -1110,37 +1120,99 @@
   }
 
   // ---------------------------------------------------------------------
-  // training-day heatmap
+  // training calendar
   // ---------------------------------------------------------------------
-  function renderHeatmap() {
-    var container = $('trainingHeatmap');
+  var calendarMonth = null; // Date (day=1) for the currently displayed month
+  var openDayDetailDate = null;
+
+  function renderCalendar() {
+    var container = $('trainingCalendar');
     if (!container) return;
-    var WEEKS = 14;
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (!calendarMonth) calendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
     var counts = {};
     state.entries.forEach(function (e) { counts[e.date] = (counts[e.date] || 0) + 1; });
 
-    var endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
-    var startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - (WEEKS * 7 - 1));
+    var year = calendarMonth.getFullYear();
+    var month = calendarMonth.getMonth();
+    var today = todayStr();
+    var isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var startWeekday = new Date(year, month, 1).getDay();
 
-    var html = '';
-    for (var col = 0; col < WEEKS; col++) {
-      var colHtml = '';
-      for (var row = 0; row < 7; row++) {
-        var d = new Date(startDate);
-        d.setDate(d.getDate() + col * 7 + row);
-        if (d > today) { colHtml += '<div class="heat-cell future"></div>'; continue; }
-        var key = dateKey(d);
-        var c = counts[key] || 0;
-        var level = c === 0 ? 0 : (c <= 1 ? 1 : (c <= 3 ? 2 : 3));
-        colHtml += '<div class="heat-cell' + (level ? ' level-' + level : '') + '" title="' + key + (c ? ' ・ ' + c + '件' : '') + '"></div>';
-      }
-      html += '<div class="heat-col">' + colHtml + '</div>';
+    var cellsHtml = '';
+    for (var i = 0; i < startWeekday; i++) cellsHtml += '<div class="cal-cell empty"></div>';
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateObj = new Date(year, month, d);
+      var dStr = dateKey(dateObj);
+      var isFuture = dateObj > now;
+      var hasEntry = !!counts[dStr];
+      var cls = 'cal-cell' + (isFuture ? ' future' : '') + (dStr === today ? ' today' : '') + (hasEntry ? ' has-entry' : '');
+      cellsHtml += '<button type="button" class="' + cls + '"' + (isFuture ? ' disabled' : ' data-date="' + dStr + '"') + '>' +
+        '<span class="cal-daynum">' + d + '</span>' +
+        (hasEntry ? '<span class="cal-check">✓</span>' : '') +
+        '</button>';
     }
-    container.innerHTML = html;
+
+    container.innerHTML =
+      '<div class="cal-nav">' +
+        '<button type="button" class="icon-btn" id="calPrevBtn" aria-label="前の月">‹</button>' +
+        '<span class="cal-month-label">' + year + '年' + (month + 1) + '月</span>' +
+        '<button type="button" class="icon-btn" id="calNextBtn" aria-label="次の月"' + (isCurrentMonth ? ' disabled' : '') + '>›</button>' +
+      '</div>' +
+      '<div class="cal-weekdays">' + ['日', '月', '火', '水', '木', '金', '土'].map(function (w) { return '<span>' + w + '</span>'; }).join('') + '</div>' +
+      '<div class="cal-grid">' + cellsHtml + '</div>';
+
+    $('calPrevBtn').addEventListener('click', function () {
+      calendarMonth = new Date(year, month - 1, 1);
+      renderCalendar();
+    });
+    if (!isCurrentMonth) {
+      $('calNextBtn').addEventListener('click', function () {
+        calendarMonth = new Date(year, month + 1, 1);
+        renderCalendar();
+      });
+    }
+  }
+
+  function bindCalendarClicks(containerEl) {
+    containerEl.addEventListener('click', function (ev) {
+      var cell = ev.target.closest('.cal-cell[data-date]');
+      if (!cell) return;
+      openDayDetail(cell.dataset.date);
+    });
+  }
+
+  function renderDayDetailBody(dateStr) {
+    var body = $('dayDetailBody');
+    var dayEntries = state.entries.filter(function (e) { return e.date === dateStr; });
+    if (!dayEntries.length) {
+      body.innerHTML = '<p class="empty-note">この日の記録はありません。</p>';
+      return;
+    }
+    var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * (e.sets || 1); }, 0);
+    var cardioMin = dayEntries.filter(function (e) { return e.minutes != null; }).reduce(function (s, e) { return s + e.minutes; }, 0);
+    var cardioKm = dayEntries.filter(function (e) { return e.distance != null; }).reduce(function (s, e) { return s + e.distance; }, 0);
+    var volParts = [];
+    if (strengthVol > 0) volParts.push('総ボリューム ' + strengthVol.toLocaleString() + 'kg');
+    if (cardioMin > 0) volParts.push('有酸素 ' + cardioMin + '分' + (cardioKm > 0 ? ' ・ ' + cardioKm.toFixed(1) + 'km' : ''));
+    var groups = groupEntriesByName(dayEntries);
+    body.innerHTML =
+      (volParts.length ? '<p class="chart-caption" style="margin:0 0 14px;">' + volParts.join(' ・ ') + '</p>' : '') +
+      '<div class="log-list">' + groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: dateStr }); }).join('') + '</div>';
+  }
+
+  function openDayDetail(dateStr) {
+    openDayDetailDate = dateStr;
+    $('dayDetailTitle').textContent = formatDateLabel(dateStr);
+    renderDayDetailBody(dateStr);
+    $('dayDetailOverlay').classList.add('open');
+  }
+
+  function refreshDayDetailIfOpen() {
+    if (openDayDetailDate) renderDayDetailBody(openDayDetailDate);
   }
 
   function renderTodayList() {
@@ -1336,7 +1408,7 @@
   }
 
   function renderHistory() {
-    renderHeatmap();
+    renderCalendar();
     var container = $('historyList');
     var dates = Array.from(new Set(state.entries.map(function (e) { return e.date; }))).sort(function (a, b) { return a < b ? 1 : -1; });
     if (!dates.length) { container.innerHTML = '<p class="empty-note">まだ記録がありません。</p>'; return; }
@@ -1767,6 +1839,10 @@
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);
   $('closeChartBtn').addEventListener('click', function () { $('chartOverlay').classList.remove('open'); });
+  $('closeDayDetailBtn').addEventListener('click', function () {
+    openDayDetailDate = null;
+    $('dayDetailOverlay').classList.remove('open');
+  });
   $('toggleKeyVisBtn').addEventListener('click', function () {
     var input = $('apiKeyInput');
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -1785,10 +1861,12 @@
   function showScreen(name) {
     document.querySelectorAll('.screen').forEach(function (el) { el.classList.toggle('active', el.id === 'screen-' + name); });
     document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.target === name); });
+    $('mypageBtn').classList.toggle('active', name === 'mypage');
   }
   document.querySelectorAll('.nav-item').forEach(function (btn) {
     btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
   });
+  $('mypageBtn').addEventListener('click', function () { showScreen('mypage'); });
   $('gotoFeedbackBtn').addEventListener('click', function () { showScreen('feedback'); generateFeedback(); });
 
   // ---------------------------------------------------------------------
@@ -1842,9 +1920,12 @@
   // (their contents are re-rendered via innerHTML, so bind on the stable container)
   bindExerciseGroupToggle($('todayList'));
   bindExerciseGroupToggle($('historyList'));
+  bindExerciseGroupToggle($('dayDetailBody'));
   bindSetRowSwipe($('todayList'), deleteEntry);
   bindSetRowSwipe($('historyList'), deleteEntry);
+  bindSetRowSwipe($('dayDetailBody'), deleteEntry);
   bindSetRowSwipe($('mealTodayList'), deleteMeal);
+  bindCalendarClicks($('trainingCalendar'));
 
   // ---------------------------------------------------------------------
   // add custom body-part category
@@ -1928,6 +2009,7 @@
       state.entries = list;
       renderTodayList();
       renderHistory();
+      refreshDayDetailIfOpen();
     },
     applyCloudProfile: function (profile) {
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
