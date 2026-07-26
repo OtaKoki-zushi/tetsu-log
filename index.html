@@ -2415,21 +2415,30 @@
     btn.textContent = '解析中…';
 
     var categories = state.categories.join('、');
-    var system = 'あなたはユーザーが貼り付けた過去の筋トレ記録のテキスト(LINEの自分宛メッセージなど)を解析し、構造化されたトレーニング記録のリストに変換するアシスタントです。' +
-      'テキスト中の日付表記(例: 「7月20日」「7/20」「2026-07-20」)を手がかりに、各種目がいつ行われたかをできるだけ正確に判断してください。日付が全く読み取れないブロックについては、今日の日付(' + todayStr() + ')を使ってください。' +
-      '部位(category)は次の中から最も近いものを選んでください: ' + categories + '。有酸素運動(ランニング等)は種類をcardio、それ以外の筋トレはstrengthとしてください。';
+    var system = 'あなたはユーザーが貼り付けた過去の筋トレ記録のテキスト(LINEの自分宛メッセージのエクスポートなど)を解析し、構造化されたトレーニング記録のリストに変換するアシスタントです。' +
+      'テキストにはLINEのタイムスタンプ・送信者名・引用符などのノイズが含まれることがあります。「メッセージの取り消し」のようなトレーニングと無関係な行は無視してください。' +
+      'テキスト中の日付表記(例: 「2026/07/20」「7月20日」「7/20」)を手がかりに、各種目がいつ行われたかをできるだけ正確に判断してください。日付が全く読み取れないブロックについては、今日の日付(' + todayStr() + ')を使ってください。' +
+      '種目名が英語で書かれている場合は日本語に翻訳してください(例: Dumbbell press→ダンベルプレス、Arm curl→アームカール、Dips→ディップス、Bench→ベンチプレス、Run→ランニング、Rowing→ローイング)。ただし種目のバリエーションを区別する補足(角度・器具名など)があれば名前に残してください。' +
+      '「18*10, 22*8, 24*8」のように同じ種目に対してカンマ区切りで複数の「重量*回数」が書かれている場合は、1セットにつき1件のレコードとして展開してください(この例なら3件)。' +
+      '部位(category)は次の中から最も近いものを選んでください: ' + categories + '。有酸素運動(ランニング等)は種類をcardio、それ以外の筋トレはstrengthとしてください。ファーマーズキャリーや階段昇降など重量×回数にも時間×距離にも当てはまらない種目は、最も近い形(strengthなら重量と回数、cardioなら時間)で無理のない範囲で近似してください。';
 
     callClaude({
       apiKey: state.settings.apiKey,
       model: state.settings.model,
       system: system,
       messages: [{ role: 'user', content: text }],
-      maxTokens: 4000,
+      maxTokens: 8000,
       outputFormat: { type: 'json_schema', schema: IMPORT_SCHEMA }
     }).then(function (responseText) {
       btn.disabled = false;
       btn.textContent = prevLabel;
-      var data = JSON.parse(responseText);
+      var data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        showToast('解析結果が大きすぎて処理できませんでした。テキストを分割して(例: 1か月分ずつ)お試しください。');
+        return;
+      }
       pendingImportEntries = data.entries || [];
       renderImportPreview();
     }).catch(function (e) {
