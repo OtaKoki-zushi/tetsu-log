@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -78,7 +78,7 @@
   .app {
     max-width: 480px;
     margin: 0 auto;
-    min-height: 100dvh;
+    height: 100dvh;
     background: var(--bg);
     display: flex;
     flex-direction: column;
@@ -86,7 +86,7 @@
     overflow: hidden;
   }
   @media (min-width: 481px) {
-    .app { box-shadow: var(--shadow); min-height: calc(100dvh - 40px); margin: 20px auto; border-radius: 24px; }
+    .app { box-shadow: var(--shadow); height: calc(100dvh - 40px); margin: 20px auto; border-radius: 24px; }
   }
 
   .app-header {
