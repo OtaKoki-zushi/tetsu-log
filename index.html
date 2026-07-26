@@ -768,7 +768,9 @@
     </div>
     <div class="settings-body">
       <div id="importStep1">
-        <p class="settings-hint" style="margin:0 0 10px;">LINEなどに送った過去のトレーニング記録のテキストを貼り付けてください。「7月20日」のような日付の区切りも一緒にコピーすると、日付を正しく読み取れます。</p>
+        <p class="settings-hint" style="margin:0 0 10px;">LINEなどに送った過去のトレーニング記録のテキストを貼り付けるか、書き出したテキストファイルを選んでください。「7月20日」のような日付の区切りも含まれていると、日付を正しく読み取れます。</p>
+        <input type="file" id="importFileInput" accept=".txt,text/plain" style="display:none">
+        <button type="button" class="btn btn-outline" id="importFileBtn" style="margin-bottom:12px;">📄 テキストファイルを選択</button>
         <div class="field">
           <textarea id="importTextInput" rows="10" placeholder="例）
 7月20日
@@ -2502,6 +2504,21 @@
 
   $('openImportBtn').addEventListener('click', openImportOverlay);
   $('closeImportBtn').addEventListener('click', closeImportOverlay);
+  $('importFileBtn').addEventListener('click', function () { $('importFileInput').click(); });
+  $('importFileInput').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      $('importTextInput').value = String(reader.result || '');
+      showToast('ファイルを読み込みました(' + file.name + ')');
+    };
+    reader.onerror = function () {
+      showToast('ファイルの読み込みに失敗しました');
+    };
+    reader.readAsText(file, 'utf-8');
+  });
   $('importParseBtn').addEventListener('click', parseImportText);
   $('importConfirmBtn').addEventListener('click', confirmImport);
   $('importBackBtn').addEventListener('click', function () {
