@@ -335,6 +335,10 @@
       <span class="card-label">種目を追加</span>
       <div class="field-row">
         <div class="field">
+          <label for="entryDate">日付</label>
+          <input type="date" id="entryDate">
+        </div>
+        <div class="field">
           <label for="exerciseName">種目名</label>
           <input type="text" id="exerciseName" placeholder="例）ベンチプレス" autocomplete="off" list="exerciseSuggestions">
           <datalist id="exerciseSuggestions"></datalist>
@@ -425,6 +429,10 @@
 
       <div class="field-row" style="margin-top:10px;">
         <div class="field">
+          <label for="mealDate">日付</label>
+          <input type="date" id="mealDate">
+        </div>
+        <div class="field">
           <label>写真から解析(任意)</label>
           <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none">
           <button type="button" class="btn btn-outline" id="mealPhotoBtn">📷 写真を撮って解析</button>
@@ -447,7 +455,7 @@
 
     <div>
       <div class="section-heading">
-        <h3>本日の記録</h3>
+        <h3 id="mealListHeading">本日の記録</h3>
         <span id="mealTodayCount"></span>
       </div>
       <div class="log-list" id="mealTodayList"></div>
@@ -638,7 +646,9 @@
     historyFilter: 'すべて',
     lastFeedback: loadJSON(LS.feedback, null),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
-    meals: loadJSON(LS.meals, [])
+    meals: loadJSON(LS.meals, []),
+    selectedDate: todayStr(),
+    mealSelectedDate: todayStr()
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
 
@@ -1129,19 +1139,20 @@
     var heading = $('todayHeading');
     var count = $('todayCount');
     var list = $('todayList');
+    var selDate = state.selectedDate;
+    var dateLabel = selDate === todayStr() ? '本日' : formatDateLabel(selDate);
     if (!state.activeCategory) {
-      heading.textContent = '本日の記録';
+      heading.textContent = dateLabel + 'の記録';
       count.textContent = '';
-      list.innerHTML = '<p class="empty-note">部位を選ぶと本日の記録が表示されます。</p>';
+      list.innerHTML = '<p class="empty-note">部位を選ぶと' + dateLabel + 'の記録が表示されます。</p>';
       return;
     }
-    var today = todayStr();
-    var todays = state.entries.filter(function (e) { return e.date === today && e.category === state.activeCategory; });
+    var todays = state.entries.filter(function (e) { return e.date === selDate && e.category === state.activeCategory; });
     var groups = groupEntriesByName(todays);
-    heading.textContent = '本日の記録・' + state.activeCategory;
+    heading.textContent = dateLabel + 'の記録・' + state.activeCategory;
     count.textContent = groups.length + '種目';
     list.innerHTML = groups.length
-      ? groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: today }); }).join('')
+      ? groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: selDate }); }).join('')
       : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
   }
 
@@ -1173,7 +1184,7 @@
       state.activeCategory = category;
 
       var isCardio = category === '有酸素';
-      var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: todayStr(), category: category, name: nameVal, ts: Date.now() };
+      var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: state.selectedDate, category: category, name: nameVal, ts: Date.now() };
 
       if (isCardio) {
         var minutes = parseFloat($('inputMinutes').value);
@@ -1606,8 +1617,10 @@
     var list = $('mealTodayList');
     if (!list) return;
     var count = $('mealTodayCount');
-    var today = todayStr();
-    var todays = state.meals.filter(function (m) { return m.date === today; });
+    var selDate = state.mealSelectedDate;
+    var dateLabel = selDate === todayStr() ? '本日' : formatDateLabel(selDate);
+    $('mealListHeading').textContent = dateLabel + 'の記録';
+    var todays = state.meals.filter(function (m) { return m.date === selDate; });
     count.textContent = todays.length + '件';
     list.innerHTML = todays.length
       ? todays.map(mealRowHtml).join('')
@@ -1649,7 +1662,7 @@
 
     var meal = {
       id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7),
-      date: todayStr(),
+      date: state.mealSelectedDate,
       mealType: mealType,
       description: description,
       calories: isNaN(calories) ? null : calories,
@@ -1672,6 +1685,10 @@
   }
 
   $('addMealForm').addEventListener('submit', handleAddMeal);
+  $('mealDate').addEventListener('change', function () {
+    state.mealSelectedDate = $('mealDate').value || todayStr();
+    renderMealTodayList();
+  });
 
   $('mealPhotoBtn').addEventListener('click', function () { $('mealPhotoInput').click(); });
   $('mealPhotoInput').addEventListener('change', function () {
@@ -1790,6 +1807,10 @@
     });
   });
   $('addForm').addEventListener('submit', handleAddEntry);
+  $('entryDate').addEventListener('change', function () {
+    state.selectedDate = $('entryDate').value || todayStr();
+    renderTodayList();
+  });
 
   document.querySelectorAll('#restPresets .pill').forEach(function (p) {
     p.addEventListener('click', function () {
@@ -1831,6 +1852,18 @@
   // ---------------------------------------------------------------------
   // init
   // ---------------------------------------------------------------------
+  function initDateInputs() {
+    var today = todayStr();
+    state.selectedDate = today;
+    state.mealSelectedDate = today;
+    var entryDateEl = $('entryDate');
+    entryDateEl.max = today;
+    entryDateEl.value = today;
+    var mealDateEl = $('mealDate');
+    mealDateEl.max = today;
+    mealDateEl.value = today;
+  }
+
   function reloadFromLocal() {
     state.entries = loadJSON(LS.entries, []);
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
@@ -1842,6 +1875,7 @@
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
+    initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
     renderSuggestions();
@@ -1853,6 +1887,7 @@
   }
 
   function init() {
+    initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
     renderSuggestions();
