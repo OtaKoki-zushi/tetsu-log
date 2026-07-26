@@ -260,6 +260,13 @@
   .cal-month-label { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .cal-stats-row { display: flex; gap: 10px; }
   .cal-stat-card { flex: 1; text-align: center; }
+
+  .seg-toggle { display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 3px; gap: 3px; }
+  .seg-btn { flex: 1; padding: 8px 0; border: none; background: none; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+  .seg-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1); }
+  .graph-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .bar-value-label { font-size: 8.5px; fill: var(--text-muted); }
+  .bar-date-label { font-size: 9px; fill: var(--text-faint); }
   .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10.5px; color: var(--text-faint); font-weight: 700; margin-bottom: 4px; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
   .cal-cell {
@@ -437,7 +444,15 @@
     </div>
 
     <div class="pillrow" id="historyPills"></div>
+
+    <div class="seg-toggle" id="historyViewToggle">
+      <button type="button" class="seg-btn active" data-view="list">リスト</button>
+      <button type="button" class="seg-btn" data-view="graph">グラフ</button>
+    </div>
+    <div class="pillrow" id="exercisePills" style="display:none"></div>
+
     <div id="historyList"></div>
+    <div id="historyGraph" style="display:none"></div>
   </section>
 
   <!-- ===== 食事 ===== -->
@@ -731,6 +746,8 @@
     manualOverride: false,
     detectMode: 'idle', // idle | dict | ai | manual | loading
     historyFilter: 'すべて',
+    historyView: 'list',
+    exerciseFilter: 'すべて',
     lastFeedback: loadJSON(LS.feedback, null),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     meals: loadJSON(LS.meals, []),
@@ -1517,11 +1534,107 @@
       btn.textContent = cat;
       btn.addEventListener('click', function () {
         state.historyFilter = cat;
+        state.exerciseFilter = 'すべて';
         renderHistoryPills();
         renderHistory();
       });
       row.appendChild(btn);
     });
+  }
+
+  function buildBarChartSvg(dates, values) {
+    if (!dates.length) return null;
+    var w = 320, h = 150, padX = 10, padTop = 16, padBottom = 16;
+    var max = Math.max.apply(null, values.concat([0])) || 1;
+    var n = dates.length;
+    var barGap = 6;
+    var innerW = w - padX * 2;
+    var barW = Math.max(4, (innerW - barGap * (n - 1)) / n);
+    var chartH = h - padTop - padBottom;
+    var bars = '', valueLabels = '', dateLabels = '';
+    for (var i = 0; i < n; i++) {
+      var v = values[i];
+      var barH = max > 0 ? (v / max) * chartH : 0;
+      var x = padX + i * (barW + barGap);
+      var y = h - padBottom - barH;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(0, barH).toFixed(1) + '" rx="3" fill="var(--accent)"></rect>';
+      valueLabels += '<text class="bar-value-label" x="' + (x + barW / 2).toFixed(1) + '" y="' + (y - 3).toFixed(1) + '" text-anchor="middle">' + (v % 1 === 0 ? v : v.toFixed(1)) + '</text>';
+      dateLabels += '<text class="bar-date-label" x="' + (x + barW / 2).toFixed(1) + '" y="' + (h - 3) + '" text-anchor="middle">' + formatShortDate(dates[i]) + '</text>';
+    }
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; display:block;">' + bars + valueLabels + dateLabels + '</svg>';
+  }
+
+  function formatShortDate(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  function graphCardHtml(title, dates, values) {
+    var svg = buildBarChartSvg(dates, values);
+    if (!svg) return '';
+    return '<div class="graph-card"><span class="card-label">' + escapeHtml(title) + '</span>' + svg + '</div>';
+  }
+
+  function renderExercisePills() {
+    var row = $('exercisePills');
+    var cat = state.historyFilter;
+    var names = Array.from(new Set(state.entries.filter(function (e) { return cat === 'すべて' || e.category === cat; }).map(function (e) { return e.name; })));
+    row.innerHTML = '';
+    ['すべて'].concat(names).forEach(function (name) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pill' + (name === state.exerciseFilter ? ' active' : '');
+      btn.textContent = name;
+      btn.addEventListener('click', function () {
+        state.exerciseFilter = name;
+        renderExercisePills();
+        renderHistoryGraph();
+      });
+      row.appendChild(btn);
+    });
+  }
+
+  function renderHistoryGraph() {
+    var container = $('historyGraph');
+    var cat = state.historyFilter;
+    var exFilter = state.exerciseFilter || 'すべて';
+    var matched = state.entries.filter(function (e) {
+      if (cat !== 'すべて' && e.category !== cat) return false;
+      if (exFilter !== 'すべて' && e.name !== exFilter) return false;
+      return true;
+    });
+    if (!matched.length) {
+      container.innerHTML = '<p class="empty-note">グラフを表示するデータがありません。</p>';
+      return;
+    }
+    var strengthEntries = matched.filter(function (e) { return e.weight != null; });
+    var cardioEntries = matched.filter(function (e) { return e.minutes != null; });
+
+    var html = '';
+    if (strengthEntries.length) {
+      var byDateVol = {}, byDateRM = {}, byDateSets = {};
+      strengthEntries.forEach(function (e) {
+        var vol = e.weight * e.reps * (e.sets || 1);
+        byDateVol[e.date] = (byDateVol[e.date] || 0) + vol;
+        byDateRM[e.date] = Math.max(byDateRM[e.date] || 0, estimate1RM(e.weight, e.reps));
+        byDateSets[e.date] = (byDateSets[e.date] || 0) + 1;
+      });
+      var dates = Object.keys(byDateVol).sort();
+      html += graphCardHtml('合計負荷量 (kg)', dates, dates.map(function (d) { return byDateVol[d]; }));
+      html += graphCardHtml('推定最大RM (kg)', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
+      html += graphCardHtml('セット数', dates, dates.map(function (d) { return byDateSets[d]; }));
+    }
+    if (cardioEntries.length) {
+      var byDateMin = {}, byDateCount = {};
+      cardioEntries.forEach(function (e) {
+        byDateMin[e.date] = (byDateMin[e.date] || 0) + e.minutes;
+        byDateCount[e.date] = (byDateCount[e.date] || 0) + 1;
+      });
+      var cdates = Object.keys(byDateMin).sort();
+      html += graphCardHtml('合計時間 (分)', cdates, cdates.map(function (d) { return byDateMin[d]; }));
+      html += graphCardHtml('実施回数', cdates, cdates.map(function (d) { return byDateCount[d]; }));
+    }
+    container.innerHTML = html || '<p class="empty-note">グラフを表示するデータがありません。</p>';
   }
 
   function renderMonthStats() {
@@ -1545,6 +1658,10 @@
   function renderHistory() {
     renderMonthStats();
     renderCalendar();
+    if (state.historyView === 'graph') {
+      renderExercisePills();
+      renderHistoryGraph();
+    }
     var container = $('historyList');
     var dates = Array.from(new Set(state.entries.map(function (e) { return e.date; }))).sort(function (a, b) { return a < b ? 1 : -1; });
     if (!dates.length) { container.innerHTML = '<p class="empty-note">まだ記録がありません。</p>'; return; }
@@ -1800,6 +1917,22 @@
     state.myPage.monthlyGoal = this.value.trim();
     saveJSON(LS.myPage, state.myPage);
     if (cloudHooks) cloudHooks.writeProfile();
+  });
+
+  document.querySelectorAll('#historyViewToggle .seg-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#historyViewToggle .seg-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.historyView = btn.dataset.view;
+      var isGraph = state.historyView === 'graph';
+      $('historyList').style.display = isGraph ? 'none' : 'block';
+      $('historyGraph').style.display = isGraph ? 'block' : 'none';
+      $('exercisePills').style.display = isGraph ? 'flex' : 'none';
+      if (isGraph) {
+        renderExercisePills();
+        renderHistoryGraph();
+      }
+    });
   });
 
   // ---------------------------------------------------------------------
