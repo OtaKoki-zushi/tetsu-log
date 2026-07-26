@@ -1665,6 +1665,12 @@
     return (d.getMonth() + 1) + '/' + d.getDate();
   }
 
+  function getWeekStartDate(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() - d.getDay());
+    return dateKey(d);
+  }
+
   function graphCardHtml(title, dates, values) {
     var svg = buildBarChartSvg(dates, values);
     if (!svg) return '';
@@ -1710,25 +1716,27 @@
     if (strengthEntries.length) {
       var byDateVol = {}, byDateRM = {}, byDateSets = {};
       strengthEntries.forEach(function (e) {
+        var week = getWeekStartDate(e.date);
         var vol = e.weight * e.reps * (e.sets || 1);
-        byDateVol[e.date] = (byDateVol[e.date] || 0) + vol;
-        byDateRM[e.date] = Math.max(byDateRM[e.date] || 0, estimate1RM(e.weight, e.reps));
-        byDateSets[e.date] = (byDateSets[e.date] || 0) + 1;
+        byDateVol[week] = (byDateVol[week] || 0) + vol;
+        byDateRM[week] = Math.max(byDateRM[week] || 0, estimate1RM(e.weight, e.reps));
+        byDateSets[week] = (byDateSets[week] || 0) + 1;
       });
       var dates = Object.keys(byDateVol).sort();
-      html += graphCardHtml('合計負荷量 (kg)', dates, dates.map(function (d) { return byDateVol[d]; }));
-      html += graphCardHtml('推定最大RM (kg)', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
-      html += graphCardHtml('セット数', dates, dates.map(function (d) { return byDateSets[d]; }));
+      html += graphCardHtml('合計負荷量 (kg/週)', dates, dates.map(function (d) { return byDateVol[d]; }));
+      html += graphCardHtml('推定最大RM (kg/週)', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
+      html += graphCardHtml('セット数 (週)', dates, dates.map(function (d) { return byDateSets[d]; }));
     }
     if (cardioEntries.length) {
       var byDateMin = {}, byDateCount = {};
       cardioEntries.forEach(function (e) {
-        byDateMin[e.date] = (byDateMin[e.date] || 0) + e.minutes;
-        byDateCount[e.date] = (byDateCount[e.date] || 0) + 1;
+        var week = getWeekStartDate(e.date);
+        byDateMin[week] = (byDateMin[week] || 0) + e.minutes;
+        byDateCount[week] = (byDateCount[week] || 0) + 1;
       });
       var cdates = Object.keys(byDateMin).sort();
-      html += graphCardHtml('合計時間 (分)', cdates, cdates.map(function (d) { return byDateMin[d]; }));
-      html += graphCardHtml('実施回数', cdates, cdates.map(function (d) { return byDateCount[d]; }));
+      html += graphCardHtml('合計時間 (分/週)', cdates, cdates.map(function (d) { return byDateMin[d]; }));
+      html += graphCardHtml('実施回数 (週)', cdates, cdates.map(function (d) { return byDateCount[d]; }));
     }
     container.innerHTML = html || '<p class="empty-note">グラフを表示するデータがありません。</p>';
   }
