@@ -157,6 +157,9 @@
   }
   .field textarea { resize: vertical; min-height: 70px; }
   .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
+  .field input[type="date"] {
+    -webkit-appearance: none; appearance: none; max-width: 100%;
+  }
   .field-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .field-trio.two-col { grid-template-columns: 1fr 1fr; }
 
