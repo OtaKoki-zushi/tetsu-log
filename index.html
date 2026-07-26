@@ -223,6 +223,8 @@
   .day-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .day-header .date { font-size: 13px; font-weight: 800; }
   .part-tag { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+  .meal-type-tag { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; display: inline-block; margin-bottom: 4px; }
+  .set-row.meal-row { padding: 12px 14px; align-items: center; }
   .day-header .volume { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .feedback-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px 18px; position: relative; overflow: hidden; }
@@ -400,6 +402,58 @@
     <div id="historyList"></div>
   </section>
 
+  <!-- ===== 食事 ===== -->
+  <section class="screen" id="screen-meals">
+    <div>
+      <h2 class="screen-title">食事管理</h2>
+      <p class="screen-desc">写真を撮ると自動でカロリー・栄養素を解析します。手入力もできます。</p>
+    </div>
+
+    <div class="card" id="mealTotalsCard">
+      <span class="card-label">本日の合計</span>
+      <div id="mealTotals"></div>
+    </div>
+
+    <form class="card" id="addMealForm">
+      <span class="card-label">食事を記録</span>
+      <div class="pillrow" id="mealTypePills">
+        <button class="pill" type="button" data-mealtype="朝食">朝食</button>
+        <button class="pill" type="button" data-mealtype="昼食">昼食</button>
+        <button class="pill" type="button" data-mealtype="夕食">夕食</button>
+        <button class="pill" type="button" data-mealtype="間食">間食</button>
+      </div>
+
+      <div class="field-row" style="margin-top:10px;">
+        <div class="field">
+          <label>写真から解析(任意)</label>
+          <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none">
+          <button type="button" class="btn btn-outline" id="mealPhotoBtn">📷 写真を撮って解析</button>
+        </div>
+        <div class="field">
+          <label for="mealDescription">内容</label>
+          <input type="text" id="mealDescription" placeholder="例）鶏胸肉のグリルとサラダ" autocomplete="off">
+        </div>
+        <div class="field"><label>カロリー (kcal)</label><input type="number" id="mealCalories" min="0" inputmode="numeric"></div>
+        <div class="field-trio">
+          <div class="field"><label>P (g)</label><input type="number" id="mealProtein" min="0" step="0.1" inputmode="decimal"></div>
+          <div class="field"><label>F (g)</label><input type="number" id="mealFat" min="0" step="0.1" inputmode="decimal"></div>
+          <div class="field"><label>C (g)</label><input type="number" id="mealCarbs" min="0" step="0.1" inputmode="decimal"></div>
+        </div>
+        <div class="detect-hint" id="mealAnalyzeHint" style="display:none"></div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="btn btn-primary" type="submit" id="addMealBtn">＋ 記録する</button>
+    </form>
+
+    <div>
+      <div class="section-heading">
+        <h3>本日の記録</h3>
+        <span id="mealTodayCount"></span>
+      </div>
+      <div class="log-list" id="mealTodayList"></div>
+    </div>
+  </section>
+
   <!-- ===== フィードバック ===== -->
   <section class="screen" id="screen-feedback">
     <div>
@@ -439,6 +493,10 @@
           <input type="number" id="mpFrequency" min="0" max="14" inputmode="numeric" placeholder="例）3">
         </div>
         <div class="field">
+          <label for="mpCalorieGoal">1日の目標カロリー (kcal・任意)</label>
+          <input type="number" id="mpCalorieGoal" min="0" inputmode="numeric" placeholder="例）2200">
+        </div>
+        <div class="field">
           <label>目的</label>
           <div class="pillrow" id="goalPills">
             <button class="pill" type="button" data-goal="筋肥大">筋肥大</button>
@@ -465,6 +523,10 @@
     <button class="nav-item" data-target="history" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
       <span>履歴</span>
+    </button>
+    <button class="nav-item" data-target="meals" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2s2-.9 2-2V2"></path><path d="M5 11v11"></path><path d="M21 2c-2 0-4 2-4 6v3c0 1.1.9 2 2 2h2"></path><path d="M19 13v9"></path></svg>
+      <span>食事</span>
     </button>
     <button class="nav-item" data-target="feedback" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
@@ -540,7 +602,8 @@
     dict: 'tetsulog_dict',
     settings: 'tetsulog_settings',
     feedback: 'tetsulog_last_feedback',
-    myPage: 'tetsulog_mypage'
+    myPage: 'tetsulog_mypage',
+    meals: 'tetsulog_meals'
   };
 
   function loadJSON(key, fallback) {
@@ -562,7 +625,7 @@
     '脚': ['スクワット', 'フロントスクワット', 'レッグプレス', 'レッグカール', 'レッグエクステンション', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ', 'ヒップスラスト', 'ハムストリングカール', 'アダクション', 'アブダクション'],
     '有酸素': ['ランニング', 'ジョギング', 'ウォーキング', 'エアロバイク', 'バイク', 'トレッドミル', '水泳', 'スイミング', 'HIIT', 'ローイングマシン', '縄跳び', 'サイクリング', 'エリプティカル']
   };
-  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '' };
+  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', calorieGoal: null };
 
   var state = {
     entries: loadJSON(LS.entries, []),
@@ -574,7 +637,8 @@
     detectMode: 'idle', // idle | dict | ai | manual | loading
     historyFilter: 'すべて',
     lastFeedback: loadJSON(LS.feedback, null),
-    myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)))
+    myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
+    meals: loadJSON(LS.meals, [])
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
 
@@ -811,9 +875,9 @@
     return Math.max.apply(null, sameDate.map(function (e) { return e.weight; }));
   }
 
-  function setRowWrapHtml(entry, innerHtml) {
+  function setRowWrapHtml(entry, innerHtml, extraClass) {
     return '<div class="set-row-wrap" data-entry-id="' + escapeHtml(entry.id) + '">' +
-      '<div class="set-row">' + innerHtml + '</div>' +
+      '<div class="set-row' + (extraClass ? ' ' + extraClass : '') + '">' + innerHtml + '</div>' +
       '<button type="button" class="set-row-delete">削除</button>' +
     '</div>';
   }
@@ -897,7 +961,7 @@
   // Swipe-left-to-delete for individual set rows. Content re-renders via
   // innerHTML, so this binds once per container (event delegation) rather
   // than per row.
-  function bindSetRowSwipe(containerEl) {
+  function bindSetRowSwipe(containerEl, onDelete) {
     var DRAG_MAX = 72;
     var OPEN_THRESHOLD = 36;
     var active = null;
@@ -964,7 +1028,7 @@
         var wrap = delBtn.closest('.set-row-wrap');
         var id = wrap && wrap.dataset.entryId;
         openRow = null;
-        if (id) deleteEntry(id);
+        if (id) onDelete(id);
         return;
       }
       var row = ev.target.closest('.set-row');
@@ -1411,6 +1475,7 @@
     $('mpHeight').value = mp.height != null ? mp.height : '';
     $('mpAge').value = mp.age != null ? mp.age : '';
     $('mpFrequency').value = mp.frequency != null ? mp.frequency : '';
+    $('mpCalorieGoal').value = mp.calorieGoal != null ? mp.calorieGoal : '';
     $('mpNote').value = mp.note || '';
     document.querySelectorAll('#goalPills .pill').forEach(function (p) {
       p.classList.toggle('active', p.dataset.goal === mp.goal);
@@ -1444,13 +1509,217 @@
       age: parseInt($('mpAge').value, 10) || null,
       frequency: parseInt($('mpFrequency').value, 10) || null,
       goal: selectedGoalEl ? selectedGoalEl.dataset.goal : null,
-      note: $('mpNote').value.trim()
+      note: $('mpNote').value.trim(),
+      calorieGoal: parseFloat($('mpCalorieGoal').value) || null
     };
     saveJSON(LS.myPage, state.myPage);
     if (cloudHooks) cloudHooks.writeProfile();
     renderMyPage();
+    renderMealTodayList();
     showToast('マイページを保存しました');
   });
+
+  // ---------------------------------------------------------------------
+  // meals
+  // ---------------------------------------------------------------------
+  var MEAL_ANALYSIS_SYSTEM = 'あなたは栄養士です。食事の写真から、内容物と概算のカロリー・タンパク質・脂質・炭水化物を日本語で推定してください。一般的な分量を仮定した目視による概算で構いません。';
+  var MEAL_SCHEMA = {
+    type: 'object',
+    properties: {
+      description: { type: 'string', description: '写真に写っている食事内容の簡潔な説明(日本語)。' },
+      calories: { type: 'number', description: '推定カロリー(kcal)。' },
+      protein: { type: 'number', description: '推定タンパク質(g)。' },
+      fat: { type: 'number', description: '推定脂質(g)。' },
+      carbs: { type: 'number', description: '推定炭水化物(g)。' }
+    },
+    required: ['description', 'calories', 'protein', 'fat', 'carbs'],
+    additionalProperties: false
+  };
+
+  function resizeImageFile(file, maxDim) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+      };
+      img.onerror = function (e) { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
+  function defaultMealType() {
+    var h = new Date().getHours();
+    if (h < 10) return '朝食';
+    if (h < 15) return '昼食';
+    if (h < 21) return '夕食';
+    return '間食';
+  }
+  function selectMealTypePill(type) {
+    document.querySelectorAll('#mealTypePills .pill').forEach(function (p) { p.classList.toggle('active', p.dataset.mealtype === type); });
+  }
+  document.querySelectorAll('#mealTypePills .pill').forEach(function (p) {
+    p.addEventListener('click', function () { selectMealTypePill(p.dataset.mealtype); });
+  });
+
+  function mealRowHtml(m) {
+    var macros = [];
+    if (m.protein != null) macros.push('P' + m.protein + 'g');
+    if (m.fat != null) macros.push('F' + m.fat + 'g');
+    if (m.carbs != null) macros.push('C' + m.carbs + 'g');
+    var inner = '<div><span class="meal-type-tag">' + escapeHtml(m.mealType) + '</span>' +
+      '<div class="log-name">' + escapeHtml(m.description || '(内容未入力)') + '</div>' +
+      (macros.length ? '<div class="log-meta">' + macros.join(' ・ ') + '</div>' : '') +
+      '</div><div class="log-stat"><div class="log-weight">' + (m.calories != null ? m.calories : '—') + '<span>kcal</span></div></div>';
+    return '<div class="exercise-group">' + setRowWrapHtml(m, inner, 'meal-row') + '</div>';
+  }
+
+  function renderMealTotals(todays) {
+    var totals = todays.reduce(function (acc, m) {
+      acc.calories += m.calories || 0;
+      acc.protein += m.protein || 0;
+      acc.fat += m.fat || 0;
+      acc.carbs += m.carbs || 0;
+      return acc;
+    }, { calories: 0, protein: 0, fat: 0, carbs: 0 });
+    var goal = state.myPage && state.myPage.calorieGoal;
+    var goalHtml = goal
+      ? '<p class="chart-caption" style="margin-top:10px;">目標 ' + goal.toLocaleString() + 'kcal ・ 残り ' + Math.max(0, Math.round(goal - totals.calories)).toLocaleString() + 'kcal</p>'
+      : '';
+    $('mealTotals').innerHTML =
+      '<div class="chart-summary" style="margin-bottom:0;">' +
+        '<div><div class="num">' + Math.round(totals.calories) + '</div><div class="lbl">kcal</div></div>' +
+        '<div><div class="num">' + totals.protein.toFixed(1) + '</div><div class="lbl">P(g)</div></div>' +
+        '<div><div class="num">' + totals.fat.toFixed(1) + '</div><div class="lbl">F(g)</div></div>' +
+        '<div><div class="num">' + totals.carbs.toFixed(1) + '</div><div class="lbl">C(g)</div></div>' +
+      '</div>' + goalHtml;
+  }
+
+  function renderMealTodayList() {
+    var list = $('mealTodayList');
+    if (!list) return;
+    var count = $('mealTodayCount');
+    var today = todayStr();
+    var todays = state.meals.filter(function (m) { return m.date === today; });
+    count.textContent = todays.length + '件';
+    list.innerHTML = todays.length
+      ? todays.map(mealRowHtml).join('')
+      : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
+    renderMealTotals(todays);
+  }
+
+  function deleteMeal(id) {
+    if (cloudHooks && cloudHooks.deleteMeal) {
+      cloudHooks.deleteMeal(id);
+    } else {
+      state.meals = state.meals.filter(function (m) { return m.id !== id; });
+      saveJSON(LS.meals, state.meals);
+      renderMealTodayList();
+    }
+  }
+
+  function clearMealForm() {
+    $('mealDescription').value = '';
+    $('mealCalories').value = '';
+    $('mealProtein').value = '';
+    $('mealFat').value = '';
+    $('mealCarbs').value = '';
+    var hint = $('mealAnalyzeHint');
+    hint.style.display = 'none';
+    hint.classList.remove('detected');
+  }
+
+  function handleAddMeal(ev) {
+    if (ev) ev.preventDefault();
+    var typeEl = document.querySelector('#mealTypePills .pill.active');
+    var mealType = typeEl ? typeEl.dataset.mealtype : defaultMealType();
+    var description = $('mealDescription').value.trim();
+    var calories = parseFloat($('mealCalories').value);
+    var protein = parseFloat($('mealProtein').value);
+    var fat = parseFloat($('mealFat').value);
+    var carbs = parseFloat($('mealCarbs').value);
+    if (!description && isNaN(calories)) { alert('内容またはカロリーを入力してください'); return; }
+
+    var meal = {
+      id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7),
+      date: todayStr(),
+      mealType: mealType,
+      description: description,
+      calories: isNaN(calories) ? null : calories,
+      protein: isNaN(protein) ? null : protein,
+      fat: isNaN(fat) ? null : fat,
+      carbs: isNaN(carbs) ? null : carbs,
+      ts: Date.now()
+    };
+
+    if (cloudHooks && cloudHooks.writeMeal) {
+      cloudHooks.writeMeal(meal);
+    } else {
+      state.meals.push(meal);
+      saveJSON(LS.meals, state.meals);
+    }
+
+    clearMealForm();
+    renderMealTodayList();
+    showToast('食事を記録しました');
+  }
+
+  $('addMealForm').addEventListener('submit', handleAddMeal);
+
+  $('mealPhotoBtn').addEventListener('click', function () { $('mealPhotoInput').click(); });
+  $('mealPhotoInput').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    if (!state.settings.apiKey) { showToast('先に設定画面でAPIキーを登録してください'); openSettings(); return; }
+
+    var hint = $('mealAnalyzeHint');
+    var photoBtn = $('mealPhotoBtn');
+    hint.style.display = 'block';
+    hint.classList.remove('detected');
+    hint.textContent = '🤖 写真を解析中…';
+    photoBtn.disabled = true;
+
+    resizeImageFile(file, 768).then(function (base64) {
+      return callClaude({
+        apiKey: state.settings.apiKey,
+        model: state.settings.model,
+        system: MEAL_ANALYSIS_SYSTEM,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: 'この食事の内容とカロリー・栄養素を推定してください。' }
+          ]
+        }],
+        maxTokens: 500,
+        outputFormat: { type: 'json_schema', schema: MEAL_SCHEMA }
+      });
+    }).then(function (text) {
+      var data = JSON.parse(text);
+      $('mealDescription').value = data.description || '';
+      $('mealCalories').value = data.calories != null ? Math.round(data.calories) : '';
+      $('mealProtein').value = data.protein != null ? data.protein : '';
+      $('mealFat').value = data.fat != null ? data.fat : '';
+      $('mealCarbs').value = data.carbs != null ? data.carbs : '';
+      hint.textContent = '🤖 AI解析結果を反映しました(内容を確認・修正してから記録してください)';
+      hint.classList.add('detected');
+      photoBtn.disabled = false;
+    }).catch(function (e) {
+      hint.textContent = '解析に失敗しました: ' + e.message;
+      hint.classList.remove('detected');
+      photoBtn.disabled = false;
+    });
+  });
+
+  selectMealTypePill(defaultMealType());
 
   // ---------------------------------------------------------------------
   // settings
@@ -1536,8 +1805,9 @@
   // (their contents are re-rendered via innerHTML, so bind on the stable container)
   bindExerciseGroupToggle($('todayList'));
   bindExerciseGroupToggle($('historyList'));
-  bindSetRowSwipe($('todayList'));
-  bindSetRowSwipe($('historyList'));
+  bindSetRowSwipe($('todayList'), deleteEntry);
+  bindSetRowSwipe($('historyList'), deleteEntry);
+  bindSetRowSwipe($('mealTodayList'), deleteMeal);
 
   // ---------------------------------------------------------------------
   // add custom body-part category
@@ -1568,6 +1838,7 @@
     state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' });
     state.lastFeedback = loadJSON(LS.feedback, null);
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
+    state.meals = loadJSON(LS.meals, []);
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
@@ -1578,6 +1849,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
+    renderMealTodayList();
   }
 
   function init() {
@@ -1588,6 +1860,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
+    renderMealTodayList();
   }
   init();
 
@@ -1622,6 +1895,11 @@
       }
       renderFeedback();
       renderMyPage();
+      renderMealTodayList();
+    },
+    applyCloudMeals: function (list) {
+      state.meals = list;
+      renderMealTodayList();
     },
     reloadFromLocal: reloadFromLocal
   };
@@ -1685,8 +1963,10 @@
   var cloudUser = null;
   var unsubEntries = null;
   var unsubProfile = null;
+  var unsubMeals = null;
 
   function entriesCol() { return collection(db, 'users', cloudUser.uid, 'entries'); }
+  function mealsCol() { return collection(db, 'users', cloudUser.uid, 'meals'); }
   function profileRef() { return doc(db, 'users', cloudUser.uid); }
 
   function updateAuthUI() {
@@ -1754,6 +2034,22 @@
     });
   }
 
+  function writeMeal(meal) {
+    if (!cloudUser) return;
+    setDoc(doc(mealsCol(), meal.id), meal).catch(function (e) {
+      console.warn('[鉄ログ] meal sync failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('同期に失敗しました: ' + e.message);
+    });
+  }
+
+  function deleteMealCloud(id) {
+    if (!cloudUser) return;
+    deleteDoc(doc(mealsCol(), id)).catch(function (e) {
+      console.warn('[鉄ログ] meal delete failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('削除に失敗しました: ' + e.message);
+    });
+  }
+
   async function subscribeCloud() {
     var ref = profileRef();
     var snap;
@@ -1780,6 +2076,10 @@
         for (var i = 0; i < localEntries.length; i++) {
           await setDoc(doc(entriesCol(), localEntries[i].id), localEntries[i]);
         }
+        var localMeals = local.meals.slice();
+        for (var j = 0; j < localMeals.length; j++) {
+          await setDoc(doc(mealsCol(), localMeals[j].id), localMeals[j]);
+        }
         window.TetsuLogApp.showToast('この端末の記録をクラウドに移行しました');
       } catch (e) {
         console.warn('[鉄ログ] initial migration failed', e);
@@ -1796,6 +2096,12 @@
       qs.forEach(function (d) { list.push(d.data()); });
       window.TetsuLogApp.applyCloudEntries(list);
     });
+
+    unsubMeals = onSnapshot(mealsCol(), function (qs) {
+      var list = [];
+      qs.forEach(function (d) { list.push(d.data()); });
+      window.TetsuLogApp.applyCloudMeals(list);
+    });
   }
 
   onAuthStateChanged(auth, function (user) {
@@ -1803,11 +2109,12 @@
     updateAuthUI();
     if (!window.TetsuLogApp) return;
     if (cloudUser) {
-      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud });
+      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud, writeMeal: writeMeal, deleteMeal: deleteMealCloud });
       subscribeCloud();
     } else {
       if (unsubEntries) { unsubEntries(); unsubEntries = null; }
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+      if (unsubMeals) { unsubMeals(); unsubMeals = null; }
       window.TetsuLogApp.setCloudHooks(null);
       window.TetsuLogApp.reloadFromLocal();
     }
