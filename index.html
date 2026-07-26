@@ -106,6 +106,12 @@
     color: var(--text-muted); flex-shrink: 0; cursor: pointer;
   }
   .icon-btn.active { color: var(--accent); border-color: var(--accent); }
+  .profile-photo-wrap { display: flex; justify-content: center; }
+  .profile-photo {
+    width: 88px; height: 88px; border-radius: 50%; object-fit: cover;
+    background: var(--surface-2); border: 1px solid var(--border);
+  }
+  .profile-photo-placeholder { display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
   .auth-badge {
     font-size: 10.5px; font-weight: 700; color: var(--text-faint);
     padding: 5px 10px; border-radius: 999px; background: var(--surface-2);
@@ -291,6 +297,7 @@
   }
   .settings-overlay.open { display: flex; }
   #chartOverlay { z-index: 51; }
+  #editEntryOverlay { z-index: 52; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
@@ -484,6 +491,21 @@
       <p class="screen-desc">体重や目的を記録しておけます。ログイン中はクラウドに同期されます。</p>
     </div>
 
+    <div class="card" id="profileCard" style="text-align:center;">
+      <div class="profile-photo-wrap">
+        <img id="profilePhotoImg" class="profile-photo" style="display:none;" alt="">
+        <div id="profilePhotoPlaceholder" class="profile-photo profile-photo-placeholder">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </div>
+        <input type="file" id="profilePhotoInput" accept="image/*" style="display:none">
+      </div>
+      <button type="button" class="btn btn-outline" id="changePhotoBtn" style="margin-top:12px; width:auto; padding:8px 18px;">写真を変更</button>
+      <div class="field" style="margin-top:16px; text-align:left;">
+        <label for="mpName">名前</label>
+        <input type="text" id="mpName" placeholder="お名前" autocomplete="off">
+      </div>
+    </div>
+
     <div class="card" id="bmiCard" style="display:none">
       <span class="card-label">BMI</span>
       <div class="log-row" style="border:none; padding:0; background:none;">
@@ -568,6 +590,10 @@
         </div>
       </div>
       <div class="field">
+        <label for="birthdateInput">生年月日</label>
+        <input type="date" id="birthdateInput">
+      </div>
+      <div class="field">
         <label for="apiKeyInput">Anthropic APIキー</label>
         <div class="key-row">
           <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
@@ -612,6 +638,29 @@
     </div>
     <div class="settings-body" id="dayDetailBody"></div>
   </div>
+
+  <!-- ===== セットの編集 ===== -->
+  <div class="settings-overlay" id="editEntryOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeEditEntryBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2 id="editEntryTitle">セットを編集</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body">
+      <form id="editEntryForm">
+        <div class="field-trio two-col" id="editTrioStrength">
+          <div class="field"><label>重量 (kg)</label><input type="number" id="editWeight" step="0.5" min="0" inputmode="decimal"></div>
+          <div class="field"><label>回数</label><input type="number" id="editReps" min="1" inputmode="numeric"></div>
+        </div>
+        <div class="field-trio two-col" id="editTrioCardio" style="display:none">
+          <div class="field"><label>時間 (分)</label><input type="number" id="editMinutes" min="1" inputmode="numeric"></div>
+          <div class="field"><label>距離 (km・任意)</label><input type="number" id="editDistance" step="0.1" min="0" inputmode="decimal"></div>
+        </div>
+        <div style="height:12px"></div>
+        <button class="btn btn-primary" type="submit">保存する</button>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -650,13 +699,13 @@
     '脚': ['スクワット', 'フロントスクワット', 'レッグプレス', 'レッグカール', 'レッグエクステンション', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ', 'ヒップスラスト', 'ハムストリングカール', 'アダクション', 'アブダクション'],
     '有酸素': ['ランニング', 'ジョギング', 'ウォーキング', 'エアロバイク', 'バイク', 'トレッドミル', '水泳', 'スイミング', 'HIIT', 'ローイングマシン', '縄跳び', 'サイクリング', 'エリプティカル']
   };
-  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', calorieGoal: null };
+  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', calorieGoal: null, name: '', photo: null };
 
   var state = {
     entries: loadJSON(LS.entries, []),
     categories: loadJSON(LS.categories, DEFAULT_CATEGORIES.slice()),
     dict: loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT))),
-    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '' }),
+    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' }),
     activeCategory: null,
     manualOverride: false,
     detectMode: 'idle', // idle | dict | ai | manual | loading
@@ -921,6 +970,31 @@
     }
   }
 
+  var editingEntryId = null;
+
+  function openEditEntry(id) {
+    var entry = state.entries.filter(function (e) { return e.id === id; })[0];
+    if (!entry) return;
+    editingEntryId = id;
+    var isCardio = entry.minutes !== undefined;
+    $('editTrioStrength').style.display = isCardio ? 'none' : 'grid';
+    $('editTrioCardio').style.display = isCardio ? 'grid' : 'none';
+    if (isCardio) {
+      $('editMinutes').value = entry.minutes;
+      $('editDistance').value = entry.distance != null ? entry.distance : '';
+    } else {
+      $('editWeight').value = entry.weight;
+      $('editReps').value = entry.reps;
+    }
+    $('editEntryTitle').textContent = entry.name + 'を編集';
+    $('editEntryOverlay').classList.add('open');
+  }
+
+  function closeEditEntry() {
+    editingEntryId = null;
+    $('editEntryOverlay').classList.remove('open');
+  }
+
   function exerciseGroupHtml(group, opts) {
     opts = opts || {};
     var items = group.items;
@@ -989,11 +1063,17 @@
   // Swipe-left-to-delete for individual set rows. Content re-renders via
   // innerHTML, so this binds once per container (event delegation) rather
   // than per row.
-  function bindSetRowSwipe(containerEl, onDelete) {
+  function bindSetRowSwipe(containerEl, onDelete, onLongPress) {
     var DRAG_MAX = 72;
     var OPEN_THRESHOLD = 36;
+    var LONG_PRESS_MS = 500;
     var active = null;
     var openRow = null;
+    var longPressTimer = null;
+
+    function clearLongPressTimer() {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }
 
     function closeOpenRow() {
       if (openRow) {
@@ -1009,6 +1089,20 @@
       if (!row) return;
       if (openRow && openRow !== row) closeOpenRow();
       active = { row: row, startX: ev.clientX, startY: ev.clientY, decided: false, dragging: false, baseX: (openRow === row ? -DRAG_MAX : 0) };
+      if (onLongPress) {
+        var wrap = row.closest('.set-row-wrap');
+        var id = wrap && wrap.dataset.entryId;
+        if (id) {
+          clearLongPressTimer();
+          longPressTimer = setTimeout(function () {
+            if (active && !active.dragging) {
+              active = null;
+              closeOpenRow();
+              onLongPress(id);
+            }
+          }, LONG_PRESS_MS);
+        }
+      }
     });
 
     containerEl.addEventListener('pointermove', function (ev) {
@@ -1019,6 +1113,7 @@
         if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
         active.decided = true;
         active.dragging = Math.abs(dx) > Math.abs(dy);
+        clearLongPressTimer();
         if (!active.dragging) { active = null; return; }
         active.row.classList.add('dragging');
         active.row.classList.remove('snap-back', 'snap-open');
@@ -1031,6 +1126,7 @@
     });
 
     function endDrag(ev) {
+      clearLongPressTimer();
       if (!active) return;
       if (!active.dragging) { active = null; return; }
       var dx = ev.clientX - active.startX;
@@ -1567,8 +1663,19 @@
     return '肥満(3度以上)';
   }
 
+  function updateHeaderAvatar() {
+    var btn = $('mypageBtn');
+    var photo = state.myPage && state.myPage.photo;
+    if (photo) {
+      btn.innerHTML = '<img src="' + photo + '" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:9px;">';
+    } else {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>';
+    }
+  }
+
   function renderMyPage() {
     var mp = state.myPage || DEFAULT_MYPAGE;
+    $('mpName').value = mp.name || '';
     $('mpWeight').value = mp.weight != null ? mp.weight : '';
     $('mpHeight').value = mp.height != null ? mp.height : '';
     $('mpAge').value = mp.age != null ? mp.age : '';
@@ -1578,6 +1685,18 @@
     document.querySelectorAll('#goalPills .pill').forEach(function (p) {
       p.classList.toggle('active', p.dataset.goal === mp.goal);
     });
+
+    var photoImg = $('profilePhotoImg');
+    var photoPlaceholder = $('profilePhotoPlaceholder');
+    if (mp.photo) {
+      photoImg.src = mp.photo;
+      photoImg.style.display = 'block';
+      photoPlaceholder.style.display = 'none';
+    } else {
+      photoImg.style.display = 'none';
+      photoPlaceholder.style.display = 'flex';
+    }
+    updateHeaderAvatar();
 
     var bmi = calcBmi(mp.weight, mp.height);
     var bmiCard = $('bmiCard');
@@ -1602,6 +1721,8 @@
     ev.preventDefault();
     var selectedGoalEl = document.querySelector('#goalPills .pill.active');
     state.myPage = {
+      name: $('mpName').value.trim(),
+      photo: (state.myPage && state.myPage.photo) || null,
       weight: parseFloat($('mpWeight').value) || null,
       height: parseFloat($('mpHeight').value) || null,
       age: parseInt($('mpAge').value, 10) || null,
@@ -1615,6 +1736,23 @@
     renderMyPage();
     renderMealTodayList();
     showToast('マイページを保存しました');
+  });
+
+  $('changePhotoBtn').addEventListener('click', function () { $('profilePhotoInput').click(); });
+  $('profilePhotoInput').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    resizeImageFile(file, 300).then(function (base64) {
+      state.myPage = state.myPage || JSON.parse(JSON.stringify(DEFAULT_MYPAGE));
+      state.myPage.photo = 'data:image/jpeg;base64,' + base64;
+      saveJSON(LS.myPage, state.myPage);
+      if (cloudHooks) cloudHooks.writeProfile();
+      renderMyPage();
+      showToast('写真を更新しました');
+    }).catch(function () {
+      showToast('写真の読み込みに失敗しました');
+    });
   });
 
   // ---------------------------------------------------------------------
@@ -1832,6 +1970,7 @@
     $('apiKeyInput').value = state.settings.apiKey;
     $('modelSelect').value = state.settings.model;
     $('feedbackInstructionsInput').value = state.settings.feedbackInstructions || '';
+    $('birthdateInput').value = state.settings.birthdate || '';
     $('settingsOverlay').classList.add('open');
   }
   function closeSettings() { $('settingsOverlay').classList.remove('open'); }
@@ -1843,12 +1982,45 @@
     openDayDetailDate = null;
     $('dayDetailOverlay').classList.remove('open');
   });
+  $('closeEditEntryBtn').addEventListener('click', closeEditEntry);
+  $('editEntryForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!editingEntryId) return;
+    var entry = state.entries.filter(function (e) { return e.id === editingEntryId; })[0];
+    if (!entry) return;
+    var isCardio = entry.minutes !== undefined;
+    if (isCardio) {
+      var minutes = parseFloat($('editMinutes').value);
+      var distance = parseFloat($('editDistance').value);
+      if (!minutes || minutes <= 0) { alert('時間(分)を入力してください'); return; }
+      entry.minutes = minutes;
+      if (!isNaN(distance) && distance > 0) entry.distance = distance;
+      else delete entry.distance;
+    } else {
+      var weight = parseFloat($('editWeight').value);
+      var reps = parseInt($('editReps').value, 10);
+      if (isNaN(weight) || weight < 0) { alert('重量を入力してください'); return; }
+      if (!reps || reps <= 0) { alert('回数を入力してください'); return; }
+      entry.weight = weight;
+      entry.reps = reps;
+    }
+    if (cloudHooks) {
+      cloudHooks.writeEntry(entry);
+    } else {
+      saveJSON(LS.entries, state.entries);
+    }
+    closeEditEntry();
+    renderTodayList();
+    renderHistory();
+    refreshDayDetailIfOpen();
+    showToast('編集を保存しました');
+  });
   $('toggleKeyVisBtn').addEventListener('click', function () {
     var input = $('apiKeyInput');
     input.type = input.type === 'password' ? 'text' : 'password';
   });
   $('saveSettingsBtn').addEventListener('click', function () {
-    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value, feedbackInstructions: $('feedbackInstructionsInput').value.trim() };
+    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value, feedbackInstructions: $('feedbackInstructionsInput').value.trim(), birthdate: $('birthdateInput').value };
     saveJSON(LS.settings, state.settings);
     if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
@@ -1921,9 +2093,9 @@
   bindExerciseGroupToggle($('todayList'));
   bindExerciseGroupToggle($('historyList'));
   bindExerciseGroupToggle($('dayDetailBody'));
-  bindSetRowSwipe($('todayList'), deleteEntry);
-  bindSetRowSwipe($('historyList'), deleteEntry);
-  bindSetRowSwipe($('dayDetailBody'), deleteEntry);
+  bindSetRowSwipe($('todayList'), deleteEntry, openEditEntry);
+  bindSetRowSwipe($('historyList'), deleteEntry, openEditEntry);
+  bindSetRowSwipe($('dayDetailBody'), deleteEntry, openEditEntry);
   bindSetRowSwipe($('mealTodayList'), deleteMeal);
   bindCalendarClicks($('trainingCalendar'));
 
@@ -1965,7 +2137,7 @@
     state.entries = loadJSON(LS.entries, []);
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
-    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '' });
+    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' });
     state.lastFeedback = loadJSON(LS.feedback, null);
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.meals = loadJSON(LS.meals, []);
