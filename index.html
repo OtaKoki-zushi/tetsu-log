@@ -438,6 +438,10 @@
       <button type="button" class="seg-btn" data-view="graph">グラフ</button>
     </div>
     <div class="pillrow" id="exercisePills" style="display:none"></div>
+    <div class="seg-toggle" id="graphGranularityToggle" style="display:none; margin-top:8px;">
+      <button type="button" class="seg-btn active" data-granularity="week">週ごと</button>
+      <button type="button" class="seg-btn" data-granularity="day">日ごと</button>
+    </div>
 
     <div id="historyList"></div>
     <div id="historyGraph" style="display:none"></div>
@@ -843,6 +847,7 @@
     historyFilter: 'すべて',
     historyView: 'list',
     exerciseFilter: 'すべて',
+    graphGranularity: 'week',
     lastFeedback: loadJSON(LS.feedback, null),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     meals: loadJSON(LS.meals, []),
@@ -1711,32 +1716,35 @@
     }
     var strengthEntries = matched.filter(function (e) { return e.weight != null; });
     var cardioEntries = matched.filter(function (e) { return e.minutes != null; });
+    var isWeekly = state.graphGranularity === 'week';
+    var unitLabel = isWeekly ? '週' : '日';
+    var groupKey = function (dateStr) { return isWeekly ? getWeekStartDate(dateStr) : dateStr; };
 
     var html = '';
     if (strengthEntries.length) {
       var byDateVol = {}, byDateRM = {}, byDateSets = {};
       strengthEntries.forEach(function (e) {
-        var week = getWeekStartDate(e.date);
+        var key = groupKey(e.date);
         var vol = e.weight * e.reps * (e.sets || 1);
-        byDateVol[week] = (byDateVol[week] || 0) + vol;
-        byDateRM[week] = Math.max(byDateRM[week] || 0, estimate1RM(e.weight, e.reps));
-        byDateSets[week] = (byDateSets[week] || 0) + 1;
+        byDateVol[key] = (byDateVol[key] || 0) + vol;
+        byDateRM[key] = Math.max(byDateRM[key] || 0, estimate1RM(e.weight, e.reps));
+        byDateSets[key] = (byDateSets[key] || 0) + 1;
       });
       var dates = Object.keys(byDateVol).sort();
-      html += graphCardHtml('合計負荷量 (kg/週)', dates, dates.map(function (d) { return byDateVol[d]; }));
-      html += graphCardHtml('推定最大RM (kg/週)', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
-      html += graphCardHtml('セット数 (週)', dates, dates.map(function (d) { return byDateSets[d]; }));
+      html += graphCardHtml('合計負荷量 (kg/' + unitLabel + ')', dates, dates.map(function (d) { return byDateVol[d]; }));
+      html += graphCardHtml('推定最大RM (kg/' + unitLabel + ')', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
+      html += graphCardHtml('セット数 (' + unitLabel + ')', dates, dates.map(function (d) { return byDateSets[d]; }));
     }
     if (cardioEntries.length) {
       var byDateMin = {}, byDateCount = {};
       cardioEntries.forEach(function (e) {
-        var week = getWeekStartDate(e.date);
-        byDateMin[week] = (byDateMin[week] || 0) + e.minutes;
-        byDateCount[week] = (byDateCount[week] || 0) + 1;
+        var key = groupKey(e.date);
+        byDateMin[key] = (byDateMin[key] || 0) + e.minutes;
+        byDateCount[key] = (byDateCount[key] || 0) + 1;
       });
       var cdates = Object.keys(byDateMin).sort();
-      html += graphCardHtml('合計時間 (分/週)', cdates, cdates.map(function (d) { return byDateMin[d]; }));
-      html += graphCardHtml('実施回数 (週)', cdates, cdates.map(function (d) { return byDateCount[d]; }));
+      html += graphCardHtml('合計時間 (分/' + unitLabel + ')', cdates, cdates.map(function (d) { return byDateMin[d]; }));
+      html += graphCardHtml('実施回数 (' + unitLabel + ')', cdates, cdates.map(function (d) { return byDateCount[d]; }));
     }
     container.innerHTML = html || '<p class="empty-note">グラフを表示するデータがありません。</p>';
   }
@@ -2099,10 +2107,20 @@
       $('historyList').style.display = isGraph ? 'none' : 'block';
       $('historyGraph').style.display = isGraph ? 'block' : 'none';
       $('exercisePills').style.display = isGraph ? 'flex' : 'none';
+      $('graphGranularityToggle').style.display = isGraph ? 'flex' : 'none';
       if (isGraph) {
         renderExercisePills();
         renderHistoryGraph();
       }
+    });
+  });
+
+  document.querySelectorAll('#graphGranularityToggle .seg-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#graphGranularityToggle .seg-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.graphGranularity = btn.dataset.granularity;
+      renderHistoryGraph();
     });
   });
 
