@@ -100,7 +100,7 @@
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
   .icon-btn {
-    width: 36px; height: 36px; border-radius: 10px;
+    width: 36px; height: 36px; padding: 0; border-radius: 10px;
     border: 1px solid var(--border); background: var(--surface);
     display: flex; align-items: center; justify-content: center;
     color: var(--text-muted); flex-shrink: 0; cursor: pointer;
@@ -431,6 +431,27 @@
       <p class="screen-desc">部位ごとに絞り込んで振り返れます。</p>
     </div>
 
+    <div class="pillrow" id="historyPills"></div>
+
+    <div class="seg-toggle" id="historyViewToggle">
+      <button type="button" class="seg-btn active" data-view="list">リスト</button>
+      <button type="button" class="seg-btn" data-view="graph">グラフ</button>
+    </div>
+    <div class="pillrow" id="exercisePills" style="display:none"></div>
+
+    <div id="historyList"></div>
+    <div id="historyGraph" style="display:none"></div>
+  </section>
+
+  <!-- ===== 進捗 ===== -->
+  <section class="screen" id="screen-progress">
+    <div>
+      <h2 class="screen-title">進捗</h2>
+      <p class="screen-desc">今月の目標や記録日数、合計負荷量を振り返れます。</p>
+    </div>
+
+    <button type="button" class="btn btn-outline" id="openRmCalcBtn">🧮 RM計算機を開く</button>
+
     <div class="card" id="monthlyGoalCard">
       <span class="card-label">今月の目標</span>
       <div class="field">
@@ -458,17 +479,6 @@
       <span class="card-label">トレーニング日数</span>
       <div id="trainingCalendar"></div>
     </div>
-
-    <div class="pillrow" id="historyPills"></div>
-
-    <div class="seg-toggle" id="historyViewToggle">
-      <button type="button" class="seg-btn active" data-view="list">リスト</button>
-      <button type="button" class="seg-btn" data-view="graph">グラフ</button>
-    </div>
-    <div class="pillrow" id="exercisePills" style="display:none"></div>
-
-    <div id="historyList"></div>
-    <div id="historyGraph" style="display:none"></div>
   </section>
 
   <!-- ===== 食事 ===== -->
@@ -532,6 +542,12 @@
     <div>
       <h2 class="screen-title">AIフィードバック</h2>
       <p class="screen-desc">本日の記録をもとに、Claudeが評価します。</p>
+    </div>
+    <div class="card" id="dailyNoteCard">
+      <span class="card-label">今日の体調・気分メモ(任意)</span>
+      <div class="field">
+        <textarea id="dailyNoteInput" rows="2" placeholder="例）今日は寝不足だった / 絶好調"></textarea>
+      </div>
     </div>
     <div id="feedbackArea"></div>
   </section>
@@ -611,6 +627,10 @@
     <button class="nav-item" data-target="history" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
       <span>履歴</span>
+    </button>
+    <button class="nav-item" data-target="progress" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
+      <span>進捗</span>
     </button>
     <button class="nav-item" data-target="meals" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2s2-.9 2-2V2"></path><path d="M5 11v11"></path><path d="M21 2c-2 0-4 2-4 6v3c0 1.1.9 2 2 2h2"></path><path d="M19 13v9"></path></svg>
@@ -713,6 +733,26 @@
       </form>
     </div>
   </div>
+
+  <!-- ===== RM計算機 ===== -->
+  <div class="settings-overlay" id="rmCalcOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeRmCalcBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2>RM計算機</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body">
+      <div class="field-trio two-col">
+        <div class="field"><label>重量 (kg)</label><input type="number" id="rmCalcWeight" step="0.5" min="0" inputmode="decimal"></div>
+        <div class="field"><label>回数</label><input type="number" id="rmCalcReps" min="1" inputmode="numeric"></div>
+      </div>
+      <div class="card" id="rmCalcResultCard" style="margin-top:16px; text-align:center; display:none;">
+        <span class="card-label">推定1RM</span>
+        <div class="log-weight" id="rmCalcResult" style="font-size:28px;">0<span>kg</span></div>
+      </div>
+      <div id="rmCalcTable" style="margin-top:16px;"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -729,7 +769,8 @@
     settings: 'tetsulog_settings',
     feedback: 'tetsulog_last_feedback',
     myPage: 'tetsulog_mypage',
-    meals: 'tetsulog_meals'
+    meals: 'tetsulog_meals',
+    dailyNotes: 'tetsulog_daily_notes'
   };
 
   function loadJSON(key, fallback) {
@@ -767,6 +808,7 @@
     lastFeedback: loadJSON(LS.feedback, null),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     meals: loadJSON(LS.meals, []),
+    dailyNotes: loadJSON(LS.dailyNotes, {}),
     selectedDate: todayStr(),
     mealSelectedDate: todayStr()
   };
@@ -1784,6 +1826,7 @@
   }
 
   function renderFeedback() {
+    $('dailyNoteInput').value = (state.dailyNotes && state.dailyNotes[todayStr()]) || '';
     var area = $('feedbackArea');
     if (!state.lastFeedback) {
       area.innerHTML = '<div class="card" style="text-align:center; padding:28px 16px;">' +
@@ -1843,6 +1886,10 @@
     var instructions = (state.settings.feedbackInstructions || '').trim();
     if (instructions) {
       system += '\n\nユーザーからの追加指示(必ず考慮すること): ' + instructions;
+    }
+    var dailyNote = (state.dailyNotes && state.dailyNotes[today]) || '';
+    if (dailyNote) {
+      system += '\n\n本日のユーザーの体調・気分メモ: ' + dailyNote + '(この体調・気分も踏まえてフィードバックしてください)';
     }
     var schema = {
       type: 'object',
@@ -1988,6 +2035,12 @@
     state.myPage = state.myPage || JSON.parse(JSON.stringify(DEFAULT_MYPAGE));
     state.myPage.monthlyGoal = this.value.trim();
     saveJSON(LS.myPage, state.myPage);
+    if (cloudHooks) cloudHooks.writeProfile();
+  });
+
+  $('dailyNoteInput').addEventListener('change', function () {
+    state.dailyNotes[todayStr()] = this.value.trim();
+    saveJSON(LS.dailyNotes, state.dailyNotes);
     if (cloudHooks) cloudHooks.writeProfile();
   });
 
@@ -2235,6 +2288,40 @@
     $('dayDetailOverlay').classList.remove('open');
   });
   $('closeEditEntryBtn').addEventListener('click', closeEditEntry);
+
+  // ---------------------------------------------------------------------
+  // RM calculator
+  // ---------------------------------------------------------------------
+  function updateRmCalc() {
+    var weight = parseFloat($('rmCalcWeight').value);
+    var reps = parseInt($('rmCalcReps').value, 10);
+    var resultCard = $('rmCalcResultCard');
+    var tableEl = $('rmCalcTable');
+    if (!weight || weight <= 0 || !reps || reps <= 0) {
+      resultCard.style.display = 'none';
+      tableEl.innerHTML = '';
+      return;
+    }
+    var rm = estimate1RM(weight, reps);
+    resultCard.style.display = 'block';
+    $('rmCalcResult').innerHTML = Math.round(rm) + '<span>kg</span>';
+    var percents = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50];
+    tableEl.innerHTML = '<div class="log-list">' + percents.map(function (p) {
+      var w = rm * p / 100;
+      var approxReps = p >= 100 ? 1 : Math.max(1, Math.round(30 * (100 / p - 1)));
+      return '<div class="log-row"><div class="log-name">' + p + '%</div><div class="log-stat"><div class="log-weight">' + w.toFixed(1) + '<span>kg</span></div><div class="log-meta">約' + approxReps + '回</div></div></div>';
+    }).join('') + '</div>';
+  }
+  $('rmCalcWeight').addEventListener('input', updateRmCalc);
+  $('rmCalcReps').addEventListener('input', updateRmCalc);
+  $('openRmCalcBtn').addEventListener('click', function () {
+    $('rmCalcWeight').value = '';
+    $('rmCalcReps').value = '';
+    $('rmCalcResultCard').style.display = 'none';
+    $('rmCalcTable').innerHTML = '';
+    $('rmCalcOverlay').classList.add('open');
+  });
+  $('closeRmCalcBtn').addEventListener('click', function () { $('rmCalcOverlay').classList.remove('open'); });
   $('editEntryForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (!editingEntryId) return;
@@ -2393,6 +2480,7 @@
     state.lastFeedback = loadJSON(LS.feedback, null);
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.meals = loadJSON(LS.meals, []);
+    state.dailyNotes = loadJSON(LS.dailyNotes, {});
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
@@ -2441,6 +2529,7 @@
       if (profile.settings) state.settings = profile.settings;
       if (profile.lastFeedback !== undefined) state.lastFeedback = profile.lastFeedback;
       if (profile.myPage) state.myPage = profile.myPage;
+      if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
       renderCategoryPills();
       renderHistoryPills();
@@ -2571,7 +2660,8 @@
       dict: s.dict,
       settings: s.settings,
       lastFeedback: s.lastFeedback,
-      myPage: s.myPage
+      myPage: s.myPage,
+      dailyNotes: s.dailyNotes
     }, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
   }
 
@@ -2627,7 +2717,8 @@
           dict: local.dict,
           settings: local.settings,
           lastFeedback: local.lastFeedback,
-          myPage: local.myPage
+          myPage: local.myPage,
+          dailyNotes: local.dailyNotes
         });
         var localEntries = local.entries.slice();
         for (var i = 0; i < localEntries.length; i++) {
