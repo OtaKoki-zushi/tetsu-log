@@ -241,6 +241,9 @@
   .fb-next { margin-top: 16px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 12px; padding: 12px 14px; }
   .fb-next h4 { font-size: 12px; font-weight: 800; margin: 0 0 6px; }
   .fb-next p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+  .fb-next ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .fb-next li { font-size: 13px; line-height: 1.6; color: var(--text); font-weight: 600; padding-left: 16px; position: relative; }
+  .fb-next li::before { content: ""; position: absolute; left: 0; top: 8px; width: 5px; height: 5px; border-radius: 999px; background: var(--accent); }
 
   .empty-note { font-size: 12.5px; color: var(--text-faint); text-align: center; padding: 22px 0; margin: 0; }
 
@@ -582,6 +585,11 @@
         </select>
         <p class="settings-hint">部位の自動判定とフィードバック生成の両方で使用します。</p>
       </div>
+      <div class="field">
+        <label for="feedbackInstructionsInput">フィードバックへの指示(任意)</label>
+        <textarea id="feedbackInstructionsInput" rows="3" placeholder="例）もっと厳しめに指摘してほしい / フォームを重点的に見てほしい / 怪我のリハビリ中なので負荷を抑えめに提案してほしい"></textarea>
+        <p class="settings-hint">ここに書いた内容が、次回以降のフィードバック生成時に考慮されます。</p>
+      </div>
       <button class="btn btn-primary" id="saveSettingsBtn" type="button">保存する</button>
     </div>
   </div>
@@ -639,7 +647,7 @@
     entries: loadJSON(LS.entries, []),
     categories: loadJSON(LS.categories, DEFAULT_CATEGORIES.slice()),
     dict: loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT))),
-    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' }),
+    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '' }),
     activeCategory: null,
     manualOverride: false,
     detectMode: 'idle', // idle | dict | ai | manual | loading
@@ -1397,7 +1405,9 @@
       '<div class="fb-summary">' + escapeHtml(data.summary) + '</div>' +
       '<div class="fb-block"><h4 class="good">◎ 良かった点</h4><ul>' + data.good.map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('') + '</ul></div>' +
       '<div class="fb-block"><h4 class="improve">△ 改善点</h4><ul>' + data.improve.map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('') + '</ul></div>' +
-      '<div class="fb-next"><h4>次回への提案</h4><p>' + escapeHtml(data.next) + '</p></div>' +
+      '<div class="fb-next"><h4>次回への提案</h4><p>' + escapeHtml(data.next) + '</p>' +
+      (data.nextMenu && data.nextMenu.length ? '<ul>' + data.nextMenu.map(function (m) { return '<li>' + escapeHtml(m) + '</li>'; }).join('') + '</ul>' : '') +
+      '</div>' +
       '</div>' +
       '<button class="btn btn-outline" id="fbRegenBtn" type="button" style="margin-top:14px;">↻ もう一度リクエスト</button>';
     $('fbRegenBtn').addEventListener('click', generateFeedback);
@@ -1432,16 +1442,21 @@
     });
 
     var userContent = '本日(' + formatDateLabel(today) + ')のトレーニング記録:\n' + lines.join('\n');
-    var system = 'あなたは経験豊富なパーソナルトレーナーです。ユーザーの筋トレ記録を分析し、日本語で具体的かつ簡潔なフィードバックを行います。専門的だが親しみやすい口調で、数値の変化に着目してください。';
+    var system = 'あなたは経験豊富なパーソナルトレーナーです。ユーザーの筋トレ記録を分析し、日本語で具体的かつ簡潔なフィードバックを行います。専門的だが親しみやすい口調で、数値の変化に着目してください。フィードバックの最後には、次回のトレーニングで取り入れるべき具体的なメニュー(種目・目標重量・回数)を必ず提案してください。';
+    var instructions = (state.settings.feedbackInstructions || '').trim();
+    if (instructions) {
+      system += '\n\nユーザーからの追加指示(必ず考慮すること): ' + instructions;
+    }
     var schema = {
       type: 'object',
       properties: {
         summary: { type: 'string', description: '全体の総評。2〜3文。' },
         good: { type: 'array', items: { type: 'string' }, description: '良かった点。2〜4個。' },
         improve: { type: 'array', items: { type: 'string' }, description: '改善点。1〜3個。' },
-        next: { type: 'string', description: '次回トレーニングへの具体的な提案。' }
+        next: { type: 'string', description: '次回のトレーニングに向けた総括的なアドバイス。1〜2文。' },
+        nextMenu: { type: 'array', items: { type: 'string' }, description: '次回のトレーニングで取り入れるべき具体的なメニュー(種目名・目標重量・回数を含む)。2〜4個。' }
       },
-      required: ['summary', 'good', 'improve', 'next'],
+      required: ['summary', 'good', 'improve', 'next', 'nextMenu'],
       additionalProperties: false
     };
 
@@ -1744,6 +1759,7 @@
   function openSettings() {
     $('apiKeyInput').value = state.settings.apiKey;
     $('modelSelect').value = state.settings.model;
+    $('feedbackInstructionsInput').value = state.settings.feedbackInstructions || '';
     $('settingsOverlay').classList.add('open');
   }
   function closeSettings() { $('settingsOverlay').classList.remove('open'); }
@@ -1756,7 +1772,7 @@
     input.type = input.type === 'password' ? 'text' : 'password';
   });
   $('saveSettingsBtn').addEventListener('click', function () {
-    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value };
+    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value, feedbackInstructions: $('feedbackInstructionsInput').value.trim() };
     saveJSON(LS.settings, state.settings);
     if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
@@ -1868,7 +1884,7 @@
     state.entries = loadJSON(LS.entries, []);
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
-    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8' });
+    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '' });
     state.lastFeedback = loadJSON(LS.feedback, null);
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.meals = loadJSON(LS.meals, []);
