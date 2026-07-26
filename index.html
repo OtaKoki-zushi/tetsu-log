@@ -196,10 +196,23 @@
   @media (prefers-reduced-motion: reduce) { .exercise-header .chevron { transition: none; } }
   .exercise-sets { display: none; flex-direction: column; border-top: 1px solid var(--border); }
   .exercise-group.expanded .exercise-sets { display: flex; }
-  .set-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px 9px 30px; font-size: 12.5px; }
-  .set-row:not(:last-child) { border-bottom: 1px dashed var(--border); }
+  .set-row-wrap { position: relative; overflow: hidden; }
+  .set-row-wrap:not(:last-child) { border-bottom: 1px dashed var(--border); }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; padding: 9px 14px 9px 30px;
+    font-size: 12.5px; background: var(--surface); position: relative; z-index: 1; touch-action: pan-y;
+  }
+  .set-row.dragging { transition: none; }
+  .set-row.snap-back, .set-row.snap-open { transition: transform 0.18s ease; }
+  @media (prefers-reduced-motion: reduce) { .set-row.snap-back, .set-row.snap-open { transition: none; } }
   .set-row .set-idx { color: var(--text-faint); font-weight: 700; }
   .set-row .set-val { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .set-row-delete {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 72px; padding: 0;
+    background: var(--accent); color: var(--accent-ink); border: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit;
+  }
 
   .cta-bar { position: sticky; bottom: 0; background: linear-gradient(to top, var(--bg) 65%, transparent); padding-top: 14px; margin-top: -4px; }
 
@@ -709,6 +722,24 @@
     return Math.max.apply(null, sameDate.map(function (e) { return e.weight; }));
   }
 
+  function setRowWrapHtml(entry, innerHtml) {
+    return '<div class="set-row-wrap" data-entry-id="' + escapeHtml(entry.id) + '">' +
+      '<div class="set-row">' + innerHtml + '</div>' +
+      '<button type="button" class="set-row-delete">削除</button>' +
+    '</div>';
+  }
+
+  function deleteEntry(id) {
+    if (cloudHooks && cloudHooks.deleteEntry) {
+      cloudHooks.deleteEntry(id);
+    } else {
+      state.entries = state.entries.filter(function (e) { return e.id !== id; });
+      saveJSON(LS.entries, state.entries);
+      renderTodayList();
+      renderHistory();
+    }
+  }
+
   function exerciseGroupHtml(group, opts) {
     opts = opts || {};
     var items = group.items;
@@ -720,8 +751,8 @@
       var totalMin = items.reduce(function (s, e) { return s + e.minutes; }, 0);
       statHtml = '<div class="log-stat"><div class="log-weight">' + totalMin + '<span>分</span></div></div>';
       setsHtml = items.map(function (e, i) {
-        return '<div class="set-row"><span class="set-idx">' + (i + 1) + '回目</span><span class="set-val">' +
-          e.minutes + '分' + (e.distance != null ? ' ・ ' + e.distance + 'km' : '') + '</span></div>';
+        return setRowWrapHtml(e, '<span class="set-idx">' + (i + 1) + '回目</span><span class="set-val">' +
+          e.minutes + '分' + (e.distance != null ? ' ・ ' + e.distance + 'km' : '') + '</span>');
       }).join('');
     } else {
       var topWeight = Math.max.apply(null, items.map(function (e) { return e.weight; }));
@@ -740,8 +771,8 @@
       statHtml = '<div class="log-stat"><div class="log-weight">' + topWeight + '<span>kg</span></div>' + deltaHtml + '</div>';
       setsHtml = items.map(function (e, i) {
         var setsCount = e.sets || 1;
-        return '<div class="set-row"><span class="set-idx">' + (i + 1) + 'セット目</span><span class="set-val">' +
-          e.weight + 'kg × ' + e.reps + '回' + (setsCount > 1 ? ' × ' + setsCount + 'セット' : '') + '</span></div>';
+        return setRowWrapHtml(e, '<span class="set-idx">' + (i + 1) + 'セット目</span><span class="set-val">' +
+          e.weight + 'kg × ' + e.reps + '回' + (setsCount > 1 ? ' × ' + setsCount + 'セット' : '') + '</span>');
       }).join('');
     }
 
@@ -760,6 +791,84 @@
       var header = ev.target.closest('.exercise-header');
       if (!header) return;
       header.closest('.exercise-group').classList.toggle('expanded');
+    });
+  }
+
+  // Swipe-left-to-delete for individual set rows. Content re-renders via
+  // innerHTML, so this binds once per container (event delegation) rather
+  // than per row.
+  function bindSetRowSwipe(containerEl) {
+    var DRAG_MAX = 72;
+    var OPEN_THRESHOLD = 36;
+    var active = null;
+    var openRow = null;
+
+    function closeOpenRow() {
+      if (openRow) {
+        openRow.classList.remove('snap-open');
+        openRow.classList.add('snap-back');
+        openRow.style.transform = 'translateX(0)';
+        openRow = null;
+      }
+    }
+
+    containerEl.addEventListener('pointerdown', function (ev) {
+      var row = ev.target.closest('.set-row');
+      if (!row) return;
+      if (openRow && openRow !== row) closeOpenRow();
+      active = { row: row, startX: ev.clientX, startY: ev.clientY, decided: false, dragging: false, baseX: (openRow === row ? -DRAG_MAX : 0) };
+    });
+
+    containerEl.addEventListener('pointermove', function (ev) {
+      if (!active) return;
+      var dx = ev.clientX - active.startX;
+      var dy = ev.clientY - active.startY;
+      if (!active.decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        active.decided = true;
+        active.dragging = Math.abs(dx) > Math.abs(dy);
+        if (!active.dragging) { active = null; return; }
+        active.row.classList.add('dragging');
+        active.row.classList.remove('snap-back', 'snap-open');
+        if (active.row.setPointerCapture) { try { active.row.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } }
+      }
+      if (!active.dragging) return;
+      var x = Math.min(0, Math.max(-DRAG_MAX, active.baseX + dx));
+      active.row.style.transform = 'translateX(' + x + 'px)';
+      ev.preventDefault();
+    });
+
+    function endDrag(ev) {
+      if (!active) return;
+      if (!active.dragging) { active = null; return; }
+      var dx = ev.clientX - active.startX;
+      var finalX = active.baseX + dx;
+      active.row.classList.remove('dragging');
+      if (finalX < -OPEN_THRESHOLD) {
+        active.row.classList.add('snap-open');
+        active.row.style.transform = 'translateX(-' + DRAG_MAX + 'px)';
+        openRow = active.row;
+      } else {
+        active.row.classList.add('snap-back');
+        active.row.style.transform = 'translateX(0)';
+        if (openRow === active.row) openRow = null;
+      }
+      active = null;
+    }
+    containerEl.addEventListener('pointerup', endDrag);
+    containerEl.addEventListener('pointercancel', endDrag);
+
+    containerEl.addEventListener('click', function (ev) {
+      var delBtn = ev.target.closest('.set-row-delete');
+      if (delBtn) {
+        var wrap = delBtn.closest('.set-row-wrap');
+        var id = wrap && wrap.dataset.entryId;
+        openRow = null;
+        if (id) deleteEntry(id);
+        return;
+      }
+      var row = ev.target.closest('.set-row');
+      if (row && openRow === row) closeOpenRow();
     });
   }
 
@@ -1164,6 +1273,8 @@
   // (their contents are re-rendered via innerHTML, so bind on the stable container)
   bindExerciseGroupToggle($('todayList'));
   bindExerciseGroupToggle($('historyList'));
+  bindSetRowSwipe($('todayList'));
+  bindSetRowSwipe($('historyList'));
 
   // ---------------------------------------------------------------------
   // add custom body-part category
@@ -1293,6 +1404,7 @@
   var getFirestore = fsModule.getFirestore;
   var doc = fsModule.doc;
   var setDoc = fsModule.setDoc;
+  var deleteDoc = fsModule.deleteDoc;
   var getDoc = fsModule.getDoc;
   var collection = fsModule.collection;
   var onSnapshot = fsModule.onSnapshot;
@@ -1371,6 +1483,14 @@
     });
   }
 
+  function deleteEntryCloud(id) {
+    if (!cloudUser) return;
+    deleteDoc(doc(entriesCol(), id)).catch(function (e) {
+      console.warn('[鉄ログ] entry delete failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('削除に失敗しました: ' + e.message);
+    });
+  }
+
   async function subscribeCloud() {
     var ref = profileRef();
     var snap;
@@ -1420,7 +1540,7 @@
     updateAuthUI();
     if (!window.TetsuLogApp) return;
     if (cloudUser) {
-      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile });
+      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud });
       subscribeCloud();
     } else {
       if (unsubEntries) { unsubEntries(); unsubEntries = null; }
