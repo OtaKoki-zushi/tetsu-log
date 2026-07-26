@@ -688,6 +688,11 @@
         <p class="settings-hint">ここに書いた内容が、次回以降のフィードバック生成時に考慮されます。</p>
       </div>
       <button class="btn btn-primary" id="saveSettingsBtn" type="button">保存する</button>
+      <div class="field">
+        <label>データ</label>
+        <button type="button" class="btn btn-outline" id="openImportBtn">📥 過去の記録をインポート</button>
+        <p class="settings-hint">LINEの自分宛メッセージなど、過去に記録したテキストをAIが解析して取り込みます。</p>
+      </div>
     </div>
   </div>
 
@@ -751,6 +756,37 @@
         <div class="log-weight" id="rmCalcResult" style="font-size:28px;">0<span>kg</span></div>
       </div>
       <div id="rmCalcTable" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
+  <!-- ===== 過去の記録をインポート ===== -->
+  <div class="settings-overlay" id="importOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeImportBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2>過去の記録をインポート</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body">
+      <div id="importStep1">
+        <p class="settings-hint" style="margin:0 0 10px;">LINEなどに送った過去のトレーニング記録のテキストを貼り付けてください。「7月20日」のような日付の区切りも一緒にコピーすると、日付を正しく読み取れます。</p>
+        <div class="field">
+          <textarea id="importTextInput" rows="10" placeholder="例）
+7月20日
+ベンチプレス 60kg×8回
+インクラインベンチ 40kg×10回
+
+7月22日
+スクワット 80kg×8回"></textarea>
+        </div>
+        <div style="height:12px"></div>
+        <button class="btn btn-primary" id="importParseBtn" type="button">🤖 AIで解析する</button>
+      </div>
+      <div id="importStep2" style="display:none">
+        <div id="importPreview"></div>
+        <div style="height:12px"></div>
+        <button class="btn btn-primary" id="importConfirmBtn" type="button">この内容でインポートする</button>
+        <button class="btn btn-outline" id="importBackBtn" type="button" style="margin-top:10px;">戻ってやり直す</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2322,6 +2358,156 @@
     $('rmCalcOverlay').classList.add('open');
   });
   $('closeRmCalcBtn').addEventListener('click', function () { $('rmCalcOverlay').classList.remove('open'); });
+
+  // ---------------------------------------------------------------------
+  // AI bulk import (paste past records as text, e.g. from LINE, and let
+  // Claude structure them into entries for review before committing).
+  // ---------------------------------------------------------------------
+  var IMPORT_SCHEMA = {
+    type: 'object',
+    properties: {
+      entries: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'YYYY-MM-DD形式の日付。テキスト中の日付表記から判断する。' },
+            type: { type: 'string', enum: ['strength', 'cardio'], description: '筋トレはstrength、有酸素運動はcardio。' },
+            category: { type: 'string', description: '部位。' },
+            name: { type: 'string', description: '種目名。' },
+            weight: { type: 'number', description: '重量(kg)。strengthのみ使用、cardioの場合は0。' },
+            reps: { type: 'number', description: '回数。strengthのみ使用、cardioの場合は0。' },
+            minutes: { type: 'number', description: '実施時間(分)。cardioのみ使用、strengthの場合は0。' },
+            distance: { type: 'number', description: '距離(km)。cardioで記載がある場合のみ、なければ0。' }
+          },
+          required: ['date', 'type', 'category', 'name', 'weight', 'reps', 'minutes', 'distance'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['entries'],
+    additionalProperties: false
+  };
+
+  var pendingImportEntries = null;
+
+  function openImportOverlay() {
+    $('importTextInput').value = '';
+    $('importStep1').style.display = 'block';
+    $('importStep2').style.display = 'none';
+    pendingImportEntries = null;
+    $('importOverlay').classList.add('open');
+  }
+  function closeImportOverlay() {
+    $('importOverlay').classList.remove('open');
+  }
+
+  function parseImportText() {
+    if (!state.settings.apiKey) { showToast('先に設定画面でAPIキーを登録してください'); return; }
+    var text = $('importTextInput').value.trim();
+    if (!text) { alert('テキストを貼り付けてください'); return; }
+
+    var btn = $('importParseBtn');
+    btn.disabled = true;
+    var prevLabel = btn.textContent;
+    btn.textContent = '解析中…';
+
+    var categories = state.categories.join('、');
+    var system = 'あなたはユーザーが貼り付けた過去の筋トレ記録のテキスト(LINEの自分宛メッセージなど)を解析し、構造化されたトレーニング記録のリストに変換するアシスタントです。' +
+      'テキスト中の日付表記(例: 「7月20日」「7/20」「2026-07-20」)を手がかりに、各種目がいつ行われたかをできるだけ正確に判断してください。日付が全く読み取れないブロックについては、今日の日付(' + todayStr() + ')を使ってください。' +
+      '部位(category)は次の中から最も近いものを選んでください: ' + categories + '。有酸素運動(ランニング等)は種類をcardio、それ以外の筋トレはstrengthとしてください。';
+
+    callClaude({
+      apiKey: state.settings.apiKey,
+      model: state.settings.model,
+      system: system,
+      messages: [{ role: 'user', content: text }],
+      maxTokens: 4000,
+      outputFormat: { type: 'json_schema', schema: IMPORT_SCHEMA }
+    }).then(function (responseText) {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      var data = JSON.parse(responseText);
+      pendingImportEntries = data.entries || [];
+      renderImportPreview();
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      showToast('解析に失敗しました: ' + e.message);
+    });
+  }
+
+  function renderImportPreview() {
+    var entries = pendingImportEntries || [];
+    if (!entries.length) {
+      $('importPreview').innerHTML = '<p class="empty-note">記録を読み取れませんでした。テキストを見直してもう一度お試しください。</p>';
+    } else {
+      var byDate = {};
+      var order = [];
+      entries.forEach(function (e) {
+        if (!byDate[e.date]) { byDate[e.date] = []; order.push(e.date); }
+        byDate[e.date].push(e);
+      });
+      order.sort();
+      var html = '<p class="settings-hint" style="margin:0 0 10px;">' + entries.length + '件の記録を読み取りました。内容を確認してインポートしてください。</p>';
+      html += order.map(function (date) {
+        var items = byDate[date];
+        var rows = items.map(function (e) {
+          var detail = e.type === 'cardio'
+            ? (e.minutes + '分' + (e.distance > 0 ? ' / ' + e.distance + 'km' : ''))
+            : (e.weight + 'kg × ' + e.reps + '回');
+          return '<div class="log-row"><div><div class="log-name">' + escapeHtml(e.name) + '</div><div class="log-meta">' + escapeHtml(e.category) + '</div></div><div class="log-stat"><div class="log-weight" style="font-size:14px;">' + escapeHtml(detail) + '</div></div></div>';
+        }).join('');
+        return '<div style="margin-bottom:14px;"><span class="card-label">' + formatDateLabel(date) + '</span><div class="log-list">' + rows + '</div></div>';
+      }).join('');
+      $('importPreview').innerHTML = html;
+    }
+    $('importStep1').style.display = 'none';
+    $('importStep2').style.display = 'block';
+  }
+
+  function confirmImport() {
+    var entries = pendingImportEntries || [];
+    if (!entries.length) return;
+    var newEntries = entries.map(function (e, i) {
+      var category = state.categories.indexOf(e.category) !== -1 ? e.category : (e.type === 'cardio' ? '有酸素' : state.categories[0]);
+      var entry = {
+        id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7) + i,
+        date: e.date,
+        category: category,
+        name: e.name,
+        ts: Date.parse(e.date + 'T12:00:00') + i
+      };
+      if (e.type === 'cardio') {
+        entry.minutes = e.minutes > 0 ? e.minutes : 1;
+        if (e.distance > 0) entry.distance = e.distance;
+      } else {
+        entry.weight = e.weight || 0;
+        entry.reps = e.reps > 0 ? e.reps : 1;
+      }
+      return entry;
+    });
+
+    if (cloudHooks) {
+      newEntries.forEach(function (entry) { cloudHooks.writeEntry(entry); });
+    } else {
+      state.entries = state.entries.concat(newEntries);
+      saveJSON(LS.entries, state.entries);
+    }
+    closeImportOverlay();
+    renderTodayList();
+    renderHistory();
+    showToast(newEntries.length + '件の記録をインポートしました');
+  }
+
+  $('openImportBtn').addEventListener('click', openImportOverlay);
+  $('closeImportBtn').addEventListener('click', closeImportOverlay);
+  $('importParseBtn').addEventListener('click', parseImportText);
+  $('importConfirmBtn').addEventListener('click', confirmImport);
+  $('importBackBtn').addEventListener('click', function () {
+    $('importStep1').style.display = 'block';
+    $('importStep2').style.display = 'none';
+  });
   $('editEntryForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (!editingEntryId) return;
