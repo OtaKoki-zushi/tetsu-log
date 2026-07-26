@@ -166,6 +166,9 @@
   .detect-hint.detected { color: var(--accent); background: var(--accent-soft); border-style: solid; border-color: transparent; font-weight: 700; }
   .detect-hint strong { font-weight: 800; }
 
+  .prev-hint { font-size: 11.5px; color: var(--text-muted); padding: 2px 2px 0; }
+  .prev-hint strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
   .btn { appearance: none; border: none; font: inherit; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; cursor: pointer; width: 100%; }
   .btn-primary { background: var(--accent); color: var(--accent-ink); }
   .btn-primary:disabled { opacity: 0.6; cursor: default; }
@@ -238,6 +241,31 @@
   .fb-next p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
 
   .empty-note { font-size: 12.5px; color: var(--text-faint); text-align: center; padding: 22px 0; margin: 0; }
+
+  .rest-timer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .rest-timer-time { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--accent); }
+  .rest-timer-presets { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; }
+  .rest-timer-presets .pill { font-size: 11.5px; padding: 6px 12px; }
+  .rest-timer-presets .pill.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .heatmap { display: flex; gap: 3px; overflow-x: auto; padding: 2px; }
+  .heat-col { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .heat-cell { width: 11px; height: 11px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border); }
+  .heat-cell.future { background: transparent; border-color: transparent; }
+  .heat-cell.level-1 { background: var(--accent-soft); border-color: transparent; }
+  .heat-cell.level-2 { background: var(--accent); opacity: 0.55; border-color: transparent; }
+  .heat-cell.level-3 { background: var(--accent); border-color: transparent; }
+
+  .pr-badge { font-size: 10.5px; margin-right: 2px; }
+  .chart-btn {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
+  }
+  .chart-summary { display: flex; gap: 18px; margin-bottom: 16px; }
+  .chart-summary div { text-align: center; }
+  .chart-summary .num { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .chart-summary .lbl { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+  .chart-caption { font-size: 11.5px; color: var(--text-faint); text-align: center; margin-top: 8px; }
 
   .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); margin: 0 auto; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -320,11 +348,28 @@
           <div class="field"><label>距離 (km・任意)</label><input type="number" id="inputDistance" step="0.1" min="0" inputmode="decimal"></div>
         </div>
 
+        <div class="prev-hint" id="prevHint" style="display:none"></div>
         <div class="detect-hint" id="detectHint">種目名を入力すると部位を自動判定します</div>
       </div>
       <div style="height:12px"></div>
       <button class="btn btn-primary" type="submit" id="addEntryBtn">＋ セットを追加</button>
     </form>
+
+    <div class="card rest-timer" id="restTimer" style="display:none">
+      <div class="rest-timer-row">
+        <div>
+          <span class="card-label" style="margin:0;">⏱ 休憩タイマー</span>
+          <div class="rest-timer-time" id="restTimerTime">1:30</div>
+        </div>
+        <button class="btn btn-outline" id="restSkipBtn" type="button" style="width:auto; padding:8px 14px;">スキップ</button>
+      </div>
+      <div class="rest-timer-presets" id="restPresets">
+        <button type="button" class="pill" data-sec="60">60秒</button>
+        <button type="button" class="pill" data-sec="90">90秒</button>
+        <button type="button" class="pill" data-sec="120">120秒</button>
+        <button type="button" class="pill" data-sec="180">180秒</button>
+      </div>
+    </div>
 
     <div>
       <div class="section-heading">
@@ -345,6 +390,12 @@
       <h2 class="screen-title">履歴</h2>
       <p class="screen-desc">部位ごとに絞り込んで振り返れます。</p>
     </div>
+
+    <div class="card">
+      <span class="card-label">トレーニング日数</span>
+      <div class="heatmap" id="trainingHeatmap"></div>
+    </div>
+
     <div class="pillrow" id="historyPills"></div>
     <div id="historyList"></div>
   </section>
@@ -464,6 +515,16 @@
       <button class="btn btn-primary" id="saveSettingsBtn" type="button">保存する</button>
     </div>
   </div>
+
+  <!-- ===== 種目の重量推移チャート ===== -->
+  <div class="settings-overlay" id="chartOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeChartBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2 id="chartTitle">推移</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body" id="chartBody"></div>
+  </div>
 </div>
 
 <script>
@@ -530,10 +591,24 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function todayStr() {
-    var d = new Date();
+  function dateKey(d) {
     var pad = function (n) { return String(n).padStart(2, '0'); };
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function todayStr() {
+    return dateKey(new Date());
+  }
+  function estimate1RM(weight, reps) {
+    return weight * (1 + reps / 30);
+  }
+  function allTimeBestWeight(name) {
+    var vals = state.entries.filter(function (e) { return e.name === name && e.weight != null; }).map(function (e) { return e.weight; });
+    return vals.length ? Math.max.apply(null, vals) : null;
+  }
+  function latestEntryForExercise(name) {
+    var matches = state.entries.filter(function (e) { return e.name === name && e.weight != null; });
+    if (!matches.length) return null;
+    return matches.reduce(function (latest, e) { return e.ts > latest.ts ? e : latest; }, matches[0]);
   }
   function formatDateLabel(dateStr) {
     var d = new Date(dateStr + 'T00:00:00');
@@ -698,6 +773,20 @@
     $('exerciseName').placeholder = isCardio ? '例）ランニング' : '例）ベンチプレス';
     renderDetectHint();
     renderTodayList();
+    renderPrevHint();
+  }
+
+  function renderPrevHint() {
+    var hint = $('prevHint');
+    var name = $('exerciseName').value.trim();
+    var latest = name ? latestEntryForExercise(name) : null;
+    if (!latest) { hint.style.display = 'none'; return; }
+    var isCardio = latest.minutes !== undefined;
+    var text = isCardio
+      ? (latest.minutes + '分' + (latest.distance != null ? ' / ' + latest.distance + 'km' : ''))
+      : (latest.weight + 'kg × ' + latest.reps + '回');
+    hint.innerHTML = '前回: <strong>' + escapeHtml(text) + '</strong>(' + formatDateLabel(latest.date) + ')';
+    hint.style.display = 'block';
   }
 
   // Each strength entry is a single set (weight × reps). Same exercise/day
@@ -768,7 +857,8 @@
           }
         }
       }
-      statHtml = '<div class="log-stat"><div class="log-weight">' + topWeight + '<span>kg</span></div>' + deltaHtml + '</div>';
+      var prBadge = (allTimeBestWeight(group.name) !== null && topWeight >= allTimeBestWeight(group.name)) ? '<span class="pr-badge" title="自己ベスト">🏆</span>' : '';
+      statHtml = '<div class="log-stat"><div class="log-weight">' + prBadge + topWeight + '<span>kg</span></div>' + deltaHtml + '</div>';
       setsHtml = items.map(function (e, i) {
         var setsCount = e.sets || 1;
         return setRowWrapHtml(e, '<span class="set-idx">' + (i + 1) + 'セット目</span><span class="set-val">' +
@@ -777,19 +867,29 @@
     }
 
     return '<div class="exercise-group' + expanded + '">' +
-      '<button type="button" class="exercise-header">' +
+      '<div class="exercise-header" role="button" tabindex="0">' +
         '<div class="eh-main"><div><div class="log-name">' + escapeHtml(group.name) + '</div><div class="log-meta">' +
         items.length + (isCardio ? '回' : 'セット') + '</div></div>' + statHtml + '</div>' +
+        (isCardio ? '' : '<button type="button" class="chart-btn" data-exercise="' + escapeHtml(group.name) + '" aria-label="推移を見る">📈</button>') +
         '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
-      '</button>' +
+      '</div>' +
       '<div class="exercise-sets">' + setsHtml + '</div>' +
     '</div>';
   }
 
   function bindExerciseGroupToggle(containerEl) {
     containerEl.addEventListener('click', function (ev) {
+      var chartBtn = ev.target.closest('.chart-btn');
+      if (chartBtn) { openChart(chartBtn.dataset.exercise); return; }
       var header = ev.target.closest('.exercise-header');
       if (!header) return;
+      header.closest('.exercise-group').classList.toggle('expanded');
+    });
+    containerEl.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      var header = ev.target.closest('.exercise-header');
+      if (!header || ev.target.closest('.chart-btn')) return;
+      ev.preventDefault();
       header.closest('.exercise-group').classList.toggle('expanded');
     });
   }
@@ -872,6 +972,95 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // per-exercise weight progression chart
+  // ---------------------------------------------------------------------
+  function buildWeightChartSvg(name) {
+    var byDate = {};
+    state.entries.forEach(function (e) {
+      if (e.name === name && e.weight != null) {
+        byDate[e.date] = Math.max(byDate[e.date] || 0, e.weight);
+      }
+    });
+    var dates = Object.keys(byDate).sort();
+    if (dates.length < 2) return null;
+    var values = dates.map(function (d) { return byDate[d]; });
+    var max = Math.max.apply(null, values);
+    var min = Math.min.apply(null, values);
+    var range = max - min || 1;
+    var w = 320, h = 150, padX = 10, padY = 14;
+    var stepX = (w - padX * 2) / (dates.length - 1);
+    var points = values.map(function (v, i) {
+      var x = padX + i * stepX;
+      var y = h - padY - ((v - min) / range) * (h - padY * 2);
+      return [x, y];
+    });
+    var pathD = points.map(function (p, i) { return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    var areaD = pathD + ' L' + points[points.length - 1][0].toFixed(1) + ',' + (h - padY) + ' L' + points[0][0].toFixed(1) + ',' + (h - padY) + ' Z';
+    var circles = points.map(function (p, i) {
+      var isLast = i === points.length - 1;
+      return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (isLast ? 4 : 2.5) + '" fill="var(--accent)"></circle>';
+    }).join('');
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; display:block;">' +
+      '<path d="' + areaD + '" fill="var(--accent-soft)" stroke="none"></path>' +
+      '<path d="' + pathD + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>' +
+      circles +
+    '</svg>';
+  }
+
+  function openChart(name) {
+    $('chartTitle').textContent = name;
+    var entries = state.entries.filter(function (e) { return e.name === name && e.weight != null; });
+    var best = allTimeBestWeight(name);
+    var sessionCount = new Set(entries.map(function (e) { return e.date; })).size;
+    var svg = buildWeightChartSvg(name);
+    var body = $('chartBody');
+    body.innerHTML =
+      '<div class="chart-summary">' +
+        '<div><div class="num">' + (best != null ? best : '—') + '<span style="font-size:12px;">kg</span></div><div class="lbl">自己ベスト</div></div>' +
+        '<div><div class="num">' + sessionCount + '</div><div class="lbl">トレーニング日数</div></div>' +
+        '<div><div class="num">' + entries.length + '</div><div class="lbl">総セット数</div></div>' +
+      '</div>' +
+      (svg
+        ? '<div class="card">' + svg + '</div><p class="chart-caption">日ごとの最大重量の推移(kg)</p>'
+        : '<p class="empty-note">グラフを表示するには2日以上のデータが必要です。</p>');
+    $('chartOverlay').classList.add('open');
+  }
+
+  // ---------------------------------------------------------------------
+  // training-day heatmap
+  // ---------------------------------------------------------------------
+  function renderHeatmap() {
+    var container = $('trainingHeatmap');
+    if (!container) return;
+    var WEEKS = 14;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var counts = {};
+    state.entries.forEach(function (e) { counts[e.date] = (counts[e.date] || 0) + 1; });
+
+    var endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+    var startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (WEEKS * 7 - 1));
+
+    var html = '';
+    for (var col = 0; col < WEEKS; col++) {
+      var colHtml = '';
+      for (var row = 0; row < 7; row++) {
+        var d = new Date(startDate);
+        d.setDate(d.getDate() + col * 7 + row);
+        if (d > today) { colHtml += '<div class="heat-cell future"></div>'; continue; }
+        var key = dateKey(d);
+        var c = counts[key] || 0;
+        var level = c === 0 ? 0 : (c <= 1 ? 1 : (c <= 3 ? 2 : 3));
+        colHtml += '<div class="heat-cell' + (level ? ' level-' + level : '') + '" title="' + key + (c ? ' ・ ' + c + '件' : '') + '"></div>';
+      }
+      html += '<div class="heat-col">' + colHtml + '</div>';
+    }
+    container.innerHTML = html;
+  }
+
   function renderTodayList() {
     var heading = $('todayHeading');
     var count = $('todayCount');
@@ -936,12 +1125,24 @@
         entry.weight = weight; entry.reps = reps;
       }
 
+      // Check for a new estimated-1RM personal record before the entry is
+      // added to state.entries (so the comparison is against prior sets only).
+      var isNewPR = false;
+      if (!isCardio) {
+        var new1RM = estimate1RM(entry.weight, entry.reps);
+        var priorBest1RM = state.entries.filter(function (e) { return e.name === entry.name && e.weight != null; })
+          .reduce(function (max, e) { return Math.max(max, estimate1RM(e.weight, e.reps)); }, 0);
+        isNewPR = priorBest1RM > 0 && new1RM > priorBest1RM;
+      }
+
       if (cloudHooks) {
         cloudHooks.writeEntry(entry);
       } else {
         state.entries.push(entry);
         saveJSON(LS.entries, state.entries);
       }
+
+      if (isNewPR) showToast('🏆 自己ベスト更新! ' + entry.name + ' 推定1RM ' + Math.round(estimate1RM(entry.weight, entry.reps)) + 'kg');
 
       if (isCardio) {
         exerciseInput.value = '';
@@ -952,6 +1153,8 @@
         // keep the exercise name + weight/reps so the next set of the same
         // exercise can be logged fast — just tweak the weight and add again.
         renderTodayList();
+        renderPrevHint();
+        startRestTimer(getRestSeconds());
         $('inputWeight').focus();
       }
       renderHistory();
@@ -983,6 +1186,53 @@
   }
 
   // ---------------------------------------------------------------------
+  // rest timer
+  // ---------------------------------------------------------------------
+  var LS_REST_SECONDS = 'tetsulog_rest_seconds';
+  var restEndAt = null;
+  var restTimerInterval = null;
+
+  function getRestSeconds() {
+    return loadJSON(LS_REST_SECONDS, 90);
+  }
+  function setRestSeconds(sec) {
+    saveJSON(LS_REST_SECONDS, sec);
+    renderRestPresets();
+  }
+  function renderRestPresets() {
+    var current = getRestSeconds();
+    document.querySelectorAll('#restPresets .pill').forEach(function (p) {
+      p.classList.toggle('active', parseInt(p.dataset.sec, 10) === current);
+    });
+  }
+  function formatMMSS(totalSec) {
+    var m = Math.floor(totalSec / 60);
+    var s = totalSec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function startRestTimer(seconds) {
+    restEndAt = Date.now() + seconds * 1000;
+    $('restTimer').style.display = 'block';
+    $('restTimerTime').textContent = formatMMSS(seconds);
+    clearInterval(restTimerInterval);
+    restTimerInterval = setInterval(tickRestTimer, 250);
+  }
+  function tickRestTimer() {
+    var remaining = Math.round((restEndAt - Date.now()) / 1000);
+    if (remaining <= 0) {
+      stopRestTimer();
+      return;
+    }
+    $('restTimerTime').textContent = formatMMSS(remaining);
+  }
+  function stopRestTimer() {
+    clearInterval(restTimerInterval);
+    restTimerInterval = null;
+    restEndAt = null;
+    $('restTimer').style.display = 'none';
+  }
+
+  // ---------------------------------------------------------------------
   // rendering — history screen
   // ---------------------------------------------------------------------
   function renderHistoryPills() {
@@ -1003,6 +1253,7 @@
   }
 
   function renderHistory() {
+    renderHeatmap();
     var container = $('historyList');
     var dates = Array.from(new Set(state.entries.map(function (e) { return e.date; }))).sort(function (a, b) { return a < b ? 1 : -1; });
     if (!dates.length) { container.innerHTML = '<p class="empty-note">まだ記録がありません。</p>'; return; }
@@ -1213,6 +1464,7 @@
 
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);
+  $('closeChartBtn').addEventListener('click', function () { $('chartOverlay').classList.remove('open'); });
   $('toggleKeyVisBtn').addEventListener('click', function () {
     var input = $('apiKeyInput');
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -1242,6 +1494,7 @@
   // ---------------------------------------------------------------------
   var exerciseInput = $('exerciseName');
   exerciseInput.addEventListener('input', function () {
+    renderPrevHint();
     if (state.manualOverride) return;
     var val = exerciseInput.value;
     if (!val.trim()) { state.detectMode = 'idle'; renderDetectHint(); return; }
@@ -1268,6 +1521,16 @@
     });
   });
   $('addForm').addEventListener('submit', handleAddEntry);
+
+  document.querySelectorAll('#restPresets .pill').forEach(function (p) {
+    p.addEventListener('click', function () {
+      var sec = parseInt(p.dataset.sec, 10);
+      setRestSeconds(sec);
+      if (restEndAt) startRestTimer(sec);
+    });
+  });
+  $('restSkipBtn').addEventListener('click', stopRestTimer);
+  renderRestPresets();
 
   // one-time delegated listeners for expanding/collapsing exercise groups
   // (their contents are re-rendered via innerHTML, so bind on the stable container)
