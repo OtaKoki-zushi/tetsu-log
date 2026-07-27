@@ -460,13 +460,16 @@
       <p class="screen-desc">今月の目標や記録日数、合計負荷量を振り返れます。</p>
     </div>
 
-    <button type="button" class="btn btn-outline" id="openRmCalcBtn">🧮 RM計算機を開く</button>
-
     <div class="card" id="monthlyGoalCard">
       <span class="card-label">今月の目標</span>
       <div class="field">
         <input type="text" id="monthlyGoalInput" placeholder="例）週3回トレーニングする" autocomplete="off">
       </div>
+    </div>
+
+    <div class="card">
+      <span class="card-label">トレーニング日数</span>
+      <div id="trainingCalendar"></div>
     </div>
 
     <div class="cal-stats-row">
@@ -485,10 +488,7 @@
       <div id="loadCompareRow"></div>
     </div>
 
-    <div class="card">
-      <span class="card-label">トレーニング日数</span>
-      <div id="trainingCalendar"></div>
-    </div>
+    <button type="button" class="btn btn-outline" id="openRmCalcBtn">🧮 RM計算機を開く</button>
   </section>
 
   <!-- ===== 食事 ===== -->
