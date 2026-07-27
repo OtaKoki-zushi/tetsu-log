@@ -907,6 +907,36 @@
   function todayStr() {
     return dateKey(new Date());
   }
+  // Entries elsewhere are matched by strict "YYYY-MM-DD" string equality (feedback
+  // lookup, calendar counts, etc.), so any date string that isn't already in that
+  // exact zero-padded form (e.g. AI-parsed imports returning "2026-4-2") needs to
+  // be normalized or those entries silently stop matching.
+  function normalizeDateStr(s) {
+    if (typeof s !== 'string') return s;
+    // Manual parse (no Date construction) so this is immune both to the
+    // "new Date(x + 'T00:00:00')" strict-ISO trap that rejects non-zero-padded
+    // input (e.g. AI-parsed "2026-4-2") and to any timezone-shift ambiguity.
+    var m = s.match(/^(\d{1,4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (!m) return s;
+    var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), da = parseInt(m[3], 10);
+    if (!y || !mo || !da) return s;
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return y + '-' + pad(mo) + '-' + pad(da);
+  }
+  // One-time repair pass for entries that slipped in with a non-canonical date
+  // string (e.g. earlier AI imports before normalizeDateStr existed).
+  function repairEntryDates() {
+    var toFix = [];
+    state.entries.forEach(function (e) {
+      var fixed = normalizeDateStr(e.date);
+      if (fixed !== e.date) { e.date = fixed; toFix.push(e); }
+    });
+    if (!toFix.length) return;
+    saveJSON(LS.entries, state.entries);
+    if (cloudHooks) {
+      toFix.forEach(function (e) { cloudHooks.writeEntry(e); });
+    }
+  }
   function estimate1RM(weight, reps) {
     return weight * (1 + reps / 30);
   }
@@ -2605,12 +2635,13 @@
     if (!entries.length) return;
     var newEntries = entries.map(function (e, i) {
       var category = state.categories.indexOf(e.category) !== -1 ? e.category : (e.type === 'cardio' ? '有酸素' : state.categories[0]);
+      var normDate = normalizeDateStr(e.date);
       var entry = {
         id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7) + i,
-        date: e.date,
+        date: normDate,
         category: category,
         name: e.name,
-        ts: Date.parse(e.date + 'T12:00:00') + i
+        ts: Date.parse(normDate + 'T12:00:00') + i
       };
       if (e.type === 'cardio') {
         entry.minutes = e.minutes > 0 ? e.minutes : 1;
@@ -2828,6 +2859,7 @@
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
+    repairEntryDates();
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
@@ -2840,6 +2872,7 @@
   }
 
   function init() {
+    repairEntryDates();
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
@@ -2863,6 +2896,7 @@
     setCloudHooks: function (hooks) { cloudHooks = hooks; },
     applyCloudEntries: function (list) {
       state.entries = list;
+      repairEntryDates();
       renderTodayList();
       renderHistory();
       refreshDayDetailIfOpen();
