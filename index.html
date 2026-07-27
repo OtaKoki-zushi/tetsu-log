@@ -551,12 +551,18 @@
   <section class="screen" id="screen-feedback">
     <div>
       <h2 class="screen-title">AIフィードバック</h2>
-      <p class="screen-desc">本日の記録をもとに、Claudeが評価します。</p>
+      <p class="screen-desc">選んだ日の記録をもとに、Claudeが評価します。</p>
+    </div>
+    <div class="card" id="feedbackDateCard">
+      <span class="card-label">対象日</span>
+      <div class="field">
+        <input type="date" id="feedbackDateInput">
+      </div>
     </div>
     <div class="card" id="dailyNoteCard">
-      <span class="card-label">今日の体調・気分メモ(任意)</span>
+      <span class="card-label">この日の体調・気分メモ(任意)</span>
       <div class="field">
-        <textarea id="dailyNoteInput" rows="2" placeholder="例）今日は寝不足だった / 絶好調"></textarea>
+        <textarea id="dailyNoteInput" rows="2" placeholder="例）この日は寝不足だった / 絶好調"></textarea>
       </div>
     </div>
     <div id="feedbackArea"></div>
@@ -830,6 +836,22 @@
   function saveJSON(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage full / disabled */ }
   }
+  // Feedback used to be stored as a single object (always "today's" feedback).
+  // Now it's a dict keyed by date so any past day can have its own feedback.
+  // Old single-object saves are migrated using the date derived from generatedAt.
+  function normalizeFeedbackHistory(raw) {
+    if (!raw) return {};
+    if (raw.data !== undefined) {
+      var d = dateKey(new Date(raw.generatedAt || Date.now()));
+      var obj = {};
+      obj[d] = raw;
+      return obj;
+    }
+    return raw;
+  }
+  function loadFeedbackHistory() {
+    return normalizeFeedbackHistory(loadJSON(LS.feedback, null));
+  }
 
   var DEFAULT_CATEGORIES = ['胸', '背中', '肩', '腕', '脚', '有酸素'];
   var DEFAULT_DICT = {
@@ -855,7 +877,8 @@
     exerciseFilter: 'すべて',
     graphGranularity: 'week',
     graphWeekStart: null,
-    lastFeedback: loadJSON(LS.feedback, null),
+    feedbackHistory: loadFeedbackHistory(),
+    feedbackSelectedDate: todayStr(),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     meals: loadJSON(LS.meals, []),
     dailyNotes: loadJSON(LS.dailyNotes, {}),
@@ -1924,7 +1947,7 @@
 
   function renderFeedbackLoading() {
     $('feedbackArea').innerHTML = '<div class="card" style="text-align:center; padding:32px 16px;">' +
-      '<div class="spinner"></div><p style="margin-top:12px;color:var(--text-muted);font-size:13px;">Claudeが本日の記録を分析しています…</p></div>';
+      '<div class="spinner"></div><p style="margin-top:12px;color:var(--text-muted);font-size:13px;">Claudeが記録を分析しています…</p></div>';
   }
 
   function showFeedbackError(msg) {
@@ -1934,16 +1957,18 @@
   }
 
   function renderFeedback() {
-    $('dailyNoteInput').value = (state.dailyNotes && state.dailyNotes[todayStr()]) || '';
+    var selDate = state.feedbackSelectedDate;
+    $('dailyNoteInput').value = (state.dailyNotes && state.dailyNotes[selDate]) || '';
     var area = $('feedbackArea');
-    if (!state.lastFeedback) {
+    var fb = state.feedbackHistory[selDate];
+    if (!fb) {
+      var dateLabel = selDate === todayStr() ? '本日' : formatDateLabel(selDate);
       area.innerHTML = '<div class="card" style="text-align:center; padding:28px 16px;">' +
-        '<p style="color:var(--text-muted); font-size:13px; margin:0 0 14px;">本日の記録をもとに、Claudeがフィードバックします。</p>' +
+        '<p style="color:var(--text-muted); font-size:13px; margin:0 0 14px;">' + escapeHtml(dateLabel) + 'の記録をもとに、Claudeがフィードバックします。</p>' +
         '<button class="btn btn-primary" id="fbGenBtn" type="button">フィードバックを生成</button></div>';
       $('fbGenBtn').addEventListener('click', generateFeedback);
       return;
     }
-    var fb = state.lastFeedback;
     var data = fb.data;
     var modelLabel = MODEL_LABELS[fb.model] || fb.model;
     area.innerHTML =
@@ -1963,9 +1988,13 @@
 
   function generateFeedback() {
     if (!state.settings.apiKey) { showFeedbackError('APIキーが未設定です。設定画面から登録してください。'); openSettings(); return; }
-    var today = todayStr();
+    var today = state.feedbackSelectedDate;
     var todays = state.entries.filter(function (e) { return e.date === today; });
-    if (!todays.length) { showFeedbackError('本日の記録がまだありません。まずは記録画面から種目を追加してください。'); return; }
+    if (!todays.length) {
+      var dateLabel = today === todayStr() ? '本日' : formatDateLabel(today);
+      showFeedbackError(dateLabel + 'の記録がまだありません。まずは記録画面から種目を追加してください。');
+      return;
+    }
 
     renderFeedbackLoading();
 
@@ -1997,7 +2026,7 @@
     }
     var dailyNote = (state.dailyNotes && state.dailyNotes[today]) || '';
     if (dailyNote) {
-      system += '\n\n本日のユーザーの体調・気分メモ: ' + dailyNote + '(この体調・気分も踏まえてフィードバックしてください)';
+      system += '\n\nこの日のユーザーの体調・気分メモ: ' + dailyNote + '(この体調・気分も踏まえてフィードバックしてください)';
     }
     var schema = {
       type: 'object',
@@ -2021,8 +2050,8 @@
       outputFormat: { type: 'json_schema', schema: schema }
     }).then(function (text) {
       var data = JSON.parse(text);
-      state.lastFeedback = { data: data, generatedAt: Date.now(), model: state.settings.model, count: todays.length };
-      saveJSON(LS.feedback, state.lastFeedback);
+      state.feedbackHistory[today] = { data: data, generatedAt: Date.now(), model: state.settings.model, count: todays.length };
+      saveJSON(LS.feedback, state.feedbackHistory);
       if (cloudHooks) cloudHooks.writeProfile();
       renderFeedback();
     }).catch(function (e) {
@@ -2147,9 +2176,13 @@
   });
 
   $('dailyNoteInput').addEventListener('change', function () {
-    state.dailyNotes[todayStr()] = this.value.trim();
+    state.dailyNotes[state.feedbackSelectedDate] = this.value.trim();
     saveJSON(LS.dailyNotes, state.dailyNotes);
     if (cloudHooks) cloudHooks.writeProfile();
+  });
+  $('feedbackDateInput').addEventListener('change', function () {
+    state.feedbackSelectedDate = this.value || todayStr();
+    renderFeedback();
   });
 
   document.querySelectorAll('#historyViewToggle .seg-btn').forEach(function (btn) {
@@ -2680,7 +2713,12 @@
     btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
   });
   $('mypageBtn').addEventListener('click', function () { showScreen('mypage'); });
-  $('gotoFeedbackBtn').addEventListener('click', function () { showScreen('feedback'); generateFeedback(); });
+  $('gotoFeedbackBtn').addEventListener('click', function () {
+    state.feedbackSelectedDate = todayStr();
+    $('feedbackDateInput').value = state.feedbackSelectedDate;
+    showScreen('feedback');
+    generateFeedback();
+  });
 
   // ---------------------------------------------------------------------
   // exercise-name input: live dict match + AI on blur
@@ -2766,12 +2804,16 @@
     var today = todayStr();
     state.selectedDate = today;
     state.mealSelectedDate = today;
+    state.feedbackSelectedDate = today;
     var entryDateEl = $('entryDate');
     entryDateEl.max = today;
     entryDateEl.value = today;
     var mealDateEl = $('mealDate');
     mealDateEl.max = today;
     mealDateEl.value = today;
+    var feedbackDateEl = $('feedbackDateInput');
+    feedbackDateEl.max = today;
+    feedbackDateEl.value = today;
   }
 
   function reloadFromLocal() {
@@ -2779,7 +2821,7 @@
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
     state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' });
-    state.lastFeedback = loadJSON(LS.feedback, null);
+    state.feedbackHistory = loadFeedbackHistory();
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.meals = loadJSON(LS.meals, []);
     state.dailyNotes = loadJSON(LS.dailyNotes, {});
@@ -2829,7 +2871,7 @@
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
       if (profile.dict) state.dict = profile.dict;
       if (profile.settings) state.settings = profile.settings;
-      if (profile.lastFeedback !== undefined) state.lastFeedback = profile.lastFeedback;
+      if (profile.lastFeedback !== undefined) state.feedbackHistory = normalizeFeedbackHistory(profile.lastFeedback);
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
@@ -2961,7 +3003,7 @@
       categories: s.categories,
       dict: s.dict,
       settings: s.settings,
-      lastFeedback: s.lastFeedback,
+      lastFeedback: s.feedbackHistory,
       myPage: s.myPage,
       dailyNotes: s.dailyNotes
     }, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
@@ -3018,7 +3060,7 @@
           categories: local.categories,
           dict: local.dict,
           settings: local.settings,
-          lastFeedback: local.lastFeedback,
+          lastFeedback: local.feedbackHistory,
           myPage: local.myPage,
           dailyNotes: local.dailyNotes
         });
