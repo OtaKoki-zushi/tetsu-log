@@ -268,6 +268,7 @@
   .seg-btn { flex: 1; padding: 8px 0; border: none; background: none; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
   .seg-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1); }
   .graph-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  #historyGraph { touch-action: pan-y; }
 
   .load-compare-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
   .load-compare-item:not(:last-child) { border-bottom: 1px dashed var(--border); }
@@ -444,6 +445,11 @@
     </div>
 
     <div id="historyList"></div>
+    <div class="cal-nav" id="graphWeekNav" style="display:none; margin-top:8px;">
+      <button type="button" class="icon-btn" id="graphWeekPrevBtn" aria-label="前の週">‹</button>
+      <span class="cal-month-label" id="graphWeekLabel"></span>
+      <button type="button" class="icon-btn" id="graphWeekNextBtn" aria-label="次の週">›</button>
+    </div>
     <div id="historyGraph" style="display:none"></div>
   </section>
 
@@ -848,6 +854,7 @@
     historyView: 'list',
     exerciseFilter: 'すべて',
     graphGranularity: 'week',
+    graphWeekStart: null,
     lastFeedback: loadJSON(LS.feedback, null),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     meals: loadJSON(LS.meals, []),
@@ -1676,6 +1683,12 @@
     return dateKey(d);
   }
 
+  function addDaysToDateStr(dateStr, days) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return dateKey(d);
+  }
+
   function graphCardHtml(title, dates, values) {
     var svg = buildBarChartSvg(dates, values);
     if (!svg) return '';
@@ -1701,6 +1714,13 @@
     });
   }
 
+  function renderGraphWeekNav(weekStart, weekEnd) {
+    var today = todayStr();
+    var isCurrentWeek = weekStart <= today && today <= weekEnd;
+    $('graphWeekLabel').textContent = formatShortDate(weekStart) + ' 〜 ' + formatShortDate(weekEnd);
+    $('graphWeekNextBtn').disabled = isCurrentWeek;
+  }
+
   function renderHistoryGraph() {
     var container = $('historyGraph');
     var cat = state.historyFilter;
@@ -1712,41 +1732,75 @@
     });
     if (!matched.length) {
       container.innerHTML = '<p class="empty-note">グラフを表示するデータがありません。</p>';
+      $('graphWeekNav').style.display = 'none';
       return;
     }
-    var strengthEntries = matched.filter(function (e) { return e.weight != null; });
-    var cardioEntries = matched.filter(function (e) { return e.minutes != null; });
+
     var isWeekly = state.graphGranularity === 'week';
-    var unitLabel = isWeekly ? '週' : '日';
-    var groupKey = function (dateStr) { return isWeekly ? getWeekStartDate(dateStr) : dateStr; };
+    var scoped = matched;
+
+    if (isWeekly) {
+      if (!state.graphWeekStart) {
+        var latestDate = matched.reduce(function (max, e) { return e.date > max ? e.date : max; }, matched[0].date);
+        state.graphWeekStart = getWeekStartDate(latestDate);
+      }
+      var weekStart = state.graphWeekStart;
+      var weekEnd = addDaysToDateStr(weekStart, 6);
+      scoped = matched.filter(function (e) { return e.date >= weekStart && e.date <= weekEnd; });
+      renderGraphWeekNav(weekStart, weekEnd);
+      $('graphWeekNav').style.display = 'flex';
+    } else {
+      $('graphWeekNav').style.display = 'none';
+    }
+
+    var strengthEntries = scoped.filter(function (e) { return e.weight != null; });
+    var cardioEntries = scoped.filter(function (e) { return e.minutes != null; });
 
     var html = '';
     if (strengthEntries.length) {
       var byDateVol = {}, byDateRM = {}, byDateSets = {};
       strengthEntries.forEach(function (e) {
-        var key = groupKey(e.date);
         var vol = e.weight * e.reps * (e.sets || 1);
-        byDateVol[key] = (byDateVol[key] || 0) + vol;
-        byDateRM[key] = Math.max(byDateRM[key] || 0, estimate1RM(e.weight, e.reps));
-        byDateSets[key] = (byDateSets[key] || 0) + 1;
+        byDateVol[e.date] = (byDateVol[e.date] || 0) + vol;
+        byDateRM[e.date] = Math.max(byDateRM[e.date] || 0, estimate1RM(e.weight, e.reps));
+        byDateSets[e.date] = (byDateSets[e.date] || 0) + 1;
       });
       var dates = Object.keys(byDateVol).sort();
-      html += graphCardHtml('合計負荷量 (kg/' + unitLabel + ')', dates, dates.map(function (d) { return byDateVol[d]; }));
-      html += graphCardHtml('推定最大RM (kg/' + unitLabel + ')', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
-      html += graphCardHtml('セット数 (' + unitLabel + ')', dates, dates.map(function (d) { return byDateSets[d]; }));
+      html += graphCardHtml('合計負荷量 (kg)', dates, dates.map(function (d) { return byDateVol[d]; }));
+      html += graphCardHtml('推定最大RM (kg)', dates, dates.map(function (d) { return Math.round(byDateRM[d]); }));
+      html += graphCardHtml('セット数', dates, dates.map(function (d) { return byDateSets[d]; }));
     }
     if (cardioEntries.length) {
       var byDateMin = {}, byDateCount = {};
       cardioEntries.forEach(function (e) {
-        var key = groupKey(e.date);
-        byDateMin[key] = (byDateMin[key] || 0) + e.minutes;
-        byDateCount[key] = (byDateCount[key] || 0) + 1;
+        byDateMin[e.date] = (byDateMin[e.date] || 0) + e.minutes;
+        byDateCount[e.date] = (byDateCount[e.date] || 0) + 1;
       });
       var cdates = Object.keys(byDateMin).sort();
-      html += graphCardHtml('合計時間 (分/' + unitLabel + ')', cdates, cdates.map(function (d) { return byDateMin[d]; }));
-      html += graphCardHtml('実施回数 (' + unitLabel + ')', cdates, cdates.map(function (d) { return byDateCount[d]; }));
+      html += graphCardHtml('合計時間 (分)', cdates, cdates.map(function (d) { return byDateMin[d]; }));
+      html += graphCardHtml('実施回数', cdates, cdates.map(function (d) { return byDateCount[d]; }));
     }
-    container.innerHTML = html || '<p class="empty-note">グラフを表示するデータがありません。</p>';
+    container.innerHTML = html || '<p class="empty-note">この週の記録がありません。</p>';
+  }
+
+  function bindGraphSwipe(containerEl) {
+    var startX = null, startY = null, tracking = false;
+    containerEl.addEventListener('pointerdown', function (ev) {
+      if (state.graphGranularity !== 'week') return;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      tracking = true;
+    });
+    containerEl.addEventListener('pointerup', function (ev) {
+      if (!tracking) return;
+      tracking = false;
+      var dx = ev.clientX - startX;
+      var dy = ev.clientY - startY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) { $('graphWeekNextBtn').click(); } else { $('graphWeekPrevBtn').click(); }
+      }
+    });
+    containerEl.addEventListener('pointercancel', function () { tracking = false; });
   }
 
   function renderMonthStats() {
@@ -2123,6 +2177,16 @@
       renderHistoryGraph();
     });
   });
+  $('graphWeekPrevBtn').addEventListener('click', function () {
+    state.graphWeekStart = addDaysToDateStr(state.graphWeekStart, -7);
+    renderHistoryGraph();
+  });
+  $('graphWeekNextBtn').addEventListener('click', function () {
+    if (this.disabled) return;
+    state.graphWeekStart = addDaysToDateStr(state.graphWeekStart, 7);
+    renderHistoryGraph();
+  });
+  bindGraphSwipe($('historyGraph'));
 
   // ---------------------------------------------------------------------
   // meals
