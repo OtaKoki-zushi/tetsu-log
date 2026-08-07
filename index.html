@@ -335,6 +335,42 @@
     transition: opacity 0.2s ease, transform 0.2s ease; z-index: 100; white-space: nowrap;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ===== workout summary card (progress screen hero) ===== */
+  .summary-card {
+    background: #0D0D10;
+    color: #F4F4F6;
+    border: 1px solid #24242A;
+    border-radius: 20px;
+    padding: 20px 18px;
+    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  }
+  .sc-caption {
+    text-align: center; font-size: 14px; font-weight: 700; line-height: 1.45;
+    color: #F4F4F6; margin: 0 0 16px; white-space: pre-wrap; word-break: break-word;
+  }
+  .sc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .sc-brand { font-size: 15px; font-weight: 800; letter-spacing: 0.06em; color: #fff; }
+  .sc-date { color: #8A8A93; font-size: 12.5px; line-height: 1.55; margin-top: 8px; }
+  .sc-ring { flex-shrink: 0; }
+  .sc-ring svg { display: block; }
+  .sc-ring-center { fill: #F4F4F6; font-weight: 800; }
+  .sc-ring-center-sub { fill: #8A8A93; }
+  .sc-stats { display: flex; justify-content: space-around; text-align: center; margin: 20px 0 4px; gap: 8px; }
+  .sc-stat { flex: 1; }
+  .sc-stat-num { font-size: 29px; font-weight: 800; line-height: 1; letter-spacing: -0.01em; }
+  .sc-stat-label { font-size: 11px; color: #8A8A93; margin-top: 8px; font-weight: 600; }
+  .sc-stat.vol .sc-stat-num { color: #3E9BFF; }
+  .sc-stat.cal .sc-stat-num { color: #2FD68A; }
+  .sc-ex-list { margin-top: 10px; }
+  .sc-ex { display: flex; justify-content: space-between; gap: 14px; padding: 15px 0; border-top: 1px solid #1D1D22; }
+  .sc-ex-info { min-width: 0; }
+  .sc-ex-name { font-size: 15px; font-weight: 700; color: #F4F4F6; display: flex; align-items: center; gap: 8px; }
+  .sc-ex-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .sc-ex-sub { font-size: 12px; color: #8A8A93; margin-top: 5px; }
+  .sc-ex-sets { text-align: right; font-size: 13.5px; font-weight: 600; color: #D4D4DA; line-height: 1.75; white-space: nowrap; flex-shrink: 0; }
+  .sc-empty { color: #8A8A93; font-size: 13px; text-align: center; padding: 8px 0; }
 </style>
 </head>
 <body>
@@ -459,6 +495,8 @@
       <h2 class="screen-title">進捗</h2>
       <p class="screen-desc">今月の目標や記録日数、合計負荷量を振り返れます。</p>
     </div>
+
+    <div class="summary-card" id="workoutSummaryCard" style="display:none"></div>
 
     <div class="card" id="monthlyGoalCard">
       <span class="card-label">今月の目標</span>
@@ -741,6 +779,8 @@
     </div>
     <div class="settings-body">
       <form id="editEntryForm">
+        <div class="field"><label>種目名</label><input type="text" id="editName" autocomplete="off" list="exerciseSuggestions"></div>
+        <div style="height:12px"></div>
         <div class="field-trio two-col" id="editTrioStrength">
           <div class="field"><label>重量 (kg)</label><input type="number" id="editWeight" step="0.5" min="0" inputmode="decimal"></div>
           <div class="field"><label>回数</label><input type="number" id="editReps" min="1" inputmode="numeric"></div>
@@ -1176,6 +1216,7 @@
     if (!entry) return;
     editingEntryId = id;
     var isCardio = entry.minutes !== undefined;
+    $('editName').value = entry.name;
     $('editTrioStrength').style.display = isCardio ? 'none' : 'grid';
     $('editTrioCardio').style.display = isCardio ? 'grid' : 'none';
     if (isCardio) {
@@ -1929,9 +1970,134 @@
     }).join('');
   }
 
+  // ---------------------------------------------------------------------
+  // workout summary card (progress screen hero) — a shareable-style
+  // snapshot of the most recent training day.
+  // ---------------------------------------------------------------------
+  var SUMMARY_COLORS = ['#3E9BFF', '#2FD68A', '#FF6B6B', '#FFB020', '#A78BFA', '#F472B6', '#38BDF8', '#FB7185', '#4ADE80', '#FBBF24'];
+  function categoryColor(cat) {
+    var idx = state.categories.indexOf(cat);
+    if (idx < 0) idx = 0;
+    return SUMMARY_COLORS[idx % SUMMARY_COLORS.length];
+  }
+  function commaNum(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function formatSummaryDate(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00');
+    var w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) + ' (' + w + ')';
+  }
+  function formatDurationMs(ms) {
+    var min = Math.round(ms / 60000);
+    var h = Math.floor(min / 60), m = min % 60;
+    return h > 0 ? (h + '時間' + m + '分') : (m + '分');
+  }
+  function buildSummaryDonutSvg(segments, centerNum, centerLabel) {
+    var size = 108, r = 42, cx = size / 2, cy = size / 2, sw = 14;
+    var C = 2 * Math.PI * r;
+    var total = segments.reduce(function (s, x) { return s + x.value; }, 0);
+    var svg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#1E1E24" stroke-width="' + sw + '"/>';
+    if (total > 0) {
+      var acc = 0;
+      segments.forEach(function (seg) {
+        if (seg.value <= 0) return;
+        var frac = seg.value / total;
+        var dash = frac * C;
+        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + seg.color + '" stroke-width="' + sw +
+          '" stroke-dasharray="' + dash.toFixed(2) + ' ' + (C - dash).toFixed(2) + '" stroke-dashoffset="' + (-acc * C).toFixed(2) +
+          '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+        acc += frac;
+      });
+    }
+    svg += '<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" dominant-baseline="middle" class="sc-ring-center" font-size="22">' + centerNum + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" class="sc-ring-center-sub" font-size="10">' + centerLabel + '</text>';
+    return '<svg viewBox="0 0 ' + size + ' ' + size + '" width="96" height="96" aria-hidden="true">' + svg + '</svg>';
+  }
+  function renderWorkoutSummary() {
+    var card = $('workoutSummaryCard');
+    if (!card) return;
+    var allDates = Array.from(new Set(state.entries.map(function (e) { return e.date; })));
+    if (!allDates.length) { card.style.display = 'none'; return; }
+    allDates.sort(function (a, b) { return a < b ? 1 : -1; });
+    var day = allDates[0];
+    var dayEntries = state.entries.filter(function (e) { return e.date === day; });
+
+    var volume = 0, cardioMin = 0;
+    dayEntries.forEach(function (e) {
+      if (e.weight != null) volume += e.weight * e.reps * (e.sets || 1);
+      if (e.minutes != null) cardioMin += e.minutes;
+    });
+    // Rough estimate (no real metabolic data): ~0.024 kcal per kg lifted,
+    // ~6 kcal per minute of cardio.
+    var calories = Math.round(volume * 0.024 + cardioMin * 6);
+    var totalDays = allDates.length;
+
+    var catVol = {};
+    dayEntries.forEach(function (e) {
+      var v = (e.weight != null) ? (e.weight || 0.5) * e.reps * (e.sets || 1)
+        : (e.minutes != null ? e.minutes * 60 : (e.reps || 1));
+      catVol[e.category] = (catVol[e.category] || 0) + v;
+    });
+    var segments = Object.keys(catVol).map(function (c) { return { value: catVol[c], color: categoryColor(c) }; });
+    var ringSvg = buildSummaryDonutSvg(segments, dayEntries.length, 'セット');
+
+    var tsList = dayEntries.map(function (e) { return e.ts; }).filter(function (t) { return typeof t === 'number'; });
+    var durationHtml = '';
+    if (tsList.length >= 2) {
+      var span = Math.max.apply(null, tsList) - Math.min.apply(null, tsList);
+      if (span >= 60000 && span <= 8 * 3600000) durationHtml = '<div>' + formatDurationMs(span) + '</div>';
+    }
+
+    var caption = (state.dailyNotes && state.dailyNotes[day]) || '';
+    var captionHtml = caption ? '<div class="sc-caption">' + escapeHtml(caption) + '</div>' : '';
+
+    var groups = groupEntriesByName(dayEntries);
+    var rowsHtml = groups.map(function (g) {
+      var items = g.items;
+      var isCardio = items[0].minutes !== undefined;
+      var dot = '<span class="sc-dot" style="background:' + categoryColor(items[0].category) + '"></span>';
+      var setsLines, subText;
+      if (isCardio) {
+        setsLines = items.map(function (e) { return e.minutes + '分' + (e.distance != null ? ' ・ ' + e.distance + 'km' : ''); }).join('<br>');
+        subText = '合計 ' + items.reduce(function (s, e) { return s + e.minutes; }, 0) + '分';
+      } else if (items.every(function (e) { return !e.weight; })) {
+        setsLines = items.map(function (e) { return e.reps + '回'; }).join('<br>');
+        subText = '合計 ' + items.reduce(function (s, e) { return s + e.reps * (e.sets || 1); }, 0) + '回';
+      } else {
+        setsLines = items.map(function (e) {
+          return (e.weight || 0) + 'kg × ' + e.reps + (e.sets && e.sets > 1 ? ' × ' + e.sets : '');
+        }).join('<br>');
+        var best1RM = items.reduce(function (m, e) { return Math.max(m, e.weight ? estimate1RM(e.weight, e.reps) : 0); }, 0);
+        subText = best1RM > 0 ? 'e1RM ' + (Math.round(best1RM * 10) / 10) + 'kg' : '';
+      }
+      return '<div class="sc-ex">' +
+        '<div class="sc-ex-info"><div class="sc-ex-name">' + dot + '<span class="sc-ex-name-text">' + escapeHtml(g.name) + '</span></div>' +
+        (subText ? '<div class="sc-ex-sub">' + subText + '</div>' : '') + '</div>' +
+        '<div class="sc-ex-sets">' + setsLines + '</div>' +
+      '</div>';
+    }).join('');
+
+    card.innerHTML =
+      captionHtml +
+      '<div class="sc-top">' +
+        '<div><div class="sc-brand">KOKI\'S LOG</div><div class="sc-date">' + formatSummaryDate(day) + durationHtml + '</div></div>' +
+        '<div class="sc-ring">' + ringSvg + '</div>' +
+      '</div>' +
+      '<div class="sc-stats">' +
+        '<div class="sc-stat"><div class="sc-stat-num">' + totalDays + '</div><div class="sc-stat-label">運動完了日数</div></div>' +
+        '<div class="sc-stat vol"><div class="sc-stat-num">' + commaNum(Math.round(volume)) + '</div><div class="sc-stat-label">ボリューム kg</div></div>' +
+        '<div class="sc-stat cal"><div class="sc-stat-num">' + calories + '</div><div class="sc-stat-label">カロリー</div></div>' +
+      '</div>' +
+      '<div class="sc-ex-list">' + (rowsHtml || '<div class="sc-empty">記録がありません</div>') + '</div>';
+    card.style.display = 'block';
+  }
+
   function renderHistory() {
     renderMonthStats();
     renderLoadCompare();
+    renderWorkoutSummary();
     renderCalendar();
     if (state.historyView === 'graph') {
       renderExercisePills();
@@ -2693,6 +2859,9 @@
     if (!editingEntryId) return;
     var entry = state.entries.filter(function (e) { return e.id === editingEntryId; })[0];
     if (!entry) return;
+    var newName = $('editName').value.trim();
+    if (!newName) { alert('種目名を入力してください'); return; }
+    entry.name = newName;
     var isCardio = entry.minutes !== undefined;
     if (isCardio) {
       var minutes = parseFloat($('editMinutes').value);
