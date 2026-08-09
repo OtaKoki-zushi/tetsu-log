@@ -893,6 +893,25 @@
   function loadFeedbackHistory() {
     return normalizeFeedbackHistory(loadJSON(LS.feedback, null));
   }
+  // Merge cloud feedback into local by date, keeping the newer entry per date.
+  // Prevents a cloud snapshot that predates a just-generated feedback from
+  // wiping it (the "appears then disappears" bug when signed in).
+  function mergeFeedbackHistory(localHist, cloudHist) {
+    var merged = {};
+    var keys = {};
+    Object.keys(localHist || {}).forEach(function (k) { keys[k] = true; });
+    Object.keys(cloudHist || {}).forEach(function (k) { keys[k] = true; });
+    Object.keys(keys).forEach(function (k) {
+      var l = localHist && localHist[k];
+      var c = cloudHist && cloudHist[k];
+      if (l && c) {
+        merged[k] = ((l.generatedAt || 0) >= (c.generatedAt || 0)) ? l : c;
+      } else {
+        merged[k] = l || c;
+      }
+    });
+    return merged;
+  }
 
   var DEFAULT_CATEGORIES = ['胸', '背中', '肩', '腕', '脚', '有酸素'];
   var DEFAULT_DICT = {
@@ -3116,7 +3135,7 @@
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
       if (profile.dict) state.dict = profile.dict;
       if (profile.settings) state.settings = profile.settings;
-      if (profile.lastFeedback !== undefined) state.feedbackHistory = normalizeFeedbackHistory(profile.lastFeedback);
+      if (profile.lastFeedback !== undefined) state.feedbackHistory = mergeFeedbackHistory(state.feedbackHistory, normalizeFeedbackHistory(profile.lastFeedback));
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
