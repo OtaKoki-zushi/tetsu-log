@@ -227,8 +227,6 @@
   .day-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .day-header .date { font-size: 13px; font-weight: 800; }
   .part-tag { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
-  .meal-type-tag { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; display: inline-block; margin-bottom: 4px; }
-  .set-row.meal-row { padding: 12px 14px; align-items: center; }
   .day-header .volume { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .feedback-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px 18px; position: relative; overflow: hidden; }
@@ -320,6 +318,9 @@
   .settings-overlay.open { display: flex; }
   #chartOverlay { z-index: 51; }
   #editEntryOverlay { z-index: 52; }
+  #groupEditOverlay { z-index: 53; }
+  .ge-set-row { display: grid; grid-template-columns: auto 1fr 1fr; align-items: end; gap: 10px; margin-bottom: 10px; }
+  .ge-set-idx { font-size: 12px; color: var(--text-muted); font-weight: 700; padding-bottom: 12px; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
@@ -372,6 +373,8 @@
   .sc-ex-sub { font-size: 12px; color: #8A8A93; margin-top: 5px; }
   .sc-ex-sets { text-align: right; font-size: 13.5px; font-weight: 600; color: #D4D4DA; line-height: 1.75; white-space: nowrap; flex-shrink: 0; }
   .sc-empty { color: #8A8A93; font-size: 13px; text-align: center; padding: 8px 0; }
+  .sc-ex { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .sc-hint { font-size: 11px; color: #6E6E78; text-align: center; margin-top: 14px; }
 </style>
 </head>
 <body>
@@ -530,62 +533,6 @@
     <button type="button" class="btn btn-outline" id="openRmCalcBtn">🧮 RM計算機を開く</button>
   </section>
 
-  <!-- ===== 食事 ===== -->
-  <section class="screen" id="screen-meals">
-    <div>
-      <h2 class="screen-title">食事管理</h2>
-      <p class="screen-desc">写真を撮ると自動でカロリー・栄養素を解析します。手入力もできます。</p>
-    </div>
-
-    <div class="card" id="mealTotalsCard">
-      <span class="card-label">本日の合計</span>
-      <div id="mealTotals"></div>
-    </div>
-
-    <form class="card" id="addMealForm">
-      <span class="card-label">食事を記録</span>
-      <div class="pillrow" id="mealTypePills">
-        <button class="pill" type="button" data-mealtype="朝食">朝食</button>
-        <button class="pill" type="button" data-mealtype="昼食">昼食</button>
-        <button class="pill" type="button" data-mealtype="夕食">夕食</button>
-        <button class="pill" type="button" data-mealtype="間食">間食</button>
-      </div>
-
-      <div class="field-row" style="margin-top:10px;">
-        <div class="field">
-          <label for="mealDate">日付</label>
-          <input type="date" id="mealDate">
-        </div>
-        <div class="field">
-          <label>写真から解析(任意)</label>
-          <input type="file" id="mealPhotoInput" accept="image/*" style="display:none">
-          <button type="button" class="btn btn-outline" id="mealPhotoBtn">📷 写真を撮る/選んで解析</button>
-        </div>
-        <div class="field">
-          <label for="mealDescription">内容</label>
-          <input type="text" id="mealDescription" placeholder="例）鶏胸肉のグリルとサラダ" autocomplete="off">
-        </div>
-        <div class="field"><label>カロリー (kcal)</label><input type="number" id="mealCalories" min="0" inputmode="numeric"></div>
-        <div class="field-trio">
-          <div class="field"><label>P (g)</label><input type="number" id="mealProtein" min="0" step="0.1" inputmode="decimal"></div>
-          <div class="field"><label>F (g)</label><input type="number" id="mealFat" min="0" step="0.1" inputmode="decimal"></div>
-          <div class="field"><label>C (g)</label><input type="number" id="mealCarbs" min="0" step="0.1" inputmode="decimal"></div>
-        </div>
-        <div class="detect-hint" id="mealAnalyzeHint" style="display:none"></div>
-      </div>
-      <div style="height:12px"></div>
-      <button class="btn btn-primary" type="submit" id="addMealBtn">＋ 記録する</button>
-    </form>
-
-    <div>
-      <div class="section-heading">
-        <h3 id="mealListHeading">本日の記録</h3>
-        <span id="mealTodayCount"></span>
-      </div>
-      <div class="log-list" id="mealTodayList"></div>
-    </div>
-  </section>
-
   <!-- ===== フィードバック ===== -->
   <section class="screen" id="screen-feedback">
     <div>
@@ -652,10 +599,6 @@
           <input type="number" id="mpFrequency" min="0" max="14" inputmode="numeric" placeholder="例）3">
         </div>
         <div class="field">
-          <label for="mpCalorieGoal">1日の目標カロリー (kcal・任意)</label>
-          <input type="number" id="mpCalorieGoal" min="0" inputmode="numeric" placeholder="例）2200">
-        </div>
-        <div class="field">
           <label>目的</label>
           <div class="pillrow" id="goalPills">
             <button class="pill" type="button" data-goal="筋肥大">筋肥大</button>
@@ -686,10 +629,6 @@
     <button class="nav-item" data-target="progress" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
       <span>進捗</span>
-    </button>
-    <button class="nav-item" data-target="meals" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2s2-.9 2-2V2"></path><path d="M5 11v11"></path><path d="M21 2c-2 0-4 2-4 6v3c0 1.1.9 2 2 2h2"></path><path d="M19 13v9"></path></svg>
-      <span>食事</span>
     </button>
     <button class="nav-item" data-target="feedback" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
@@ -796,6 +735,30 @@
     </div>
   </div>
 
+  <!-- ===== 種目まとめて編集(進捗の長押し) ===== -->
+  <div class="settings-overlay" id="groupEditOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeGroupEditBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2 id="groupEditTitle">種目を編集</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body">
+      <form id="groupEditForm">
+        <div class="field"><label>種目名</label><input type="text" id="groupEditName" autocomplete="off" list="exerciseSuggestions"></div>
+        <div style="height:12px"></div>
+        <div class="field" id="groupEditCategoryField">
+          <label>部位</label>
+          <div class="pillrow" id="groupEditCategoryPills"></div>
+        </div>
+        <div style="height:12px"></div>
+        <div class="section-heading"><h3>各セット</h3></div>
+        <div id="groupEditSets"></div>
+        <div style="height:14px"></div>
+        <button class="btn btn-primary" type="submit">保存する</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ===== RM計算機 ===== -->
   <div class="settings-overlay" id="rmCalcOverlay">
     <div class="settings-header">
@@ -864,7 +827,6 @@
     settings: 'tetsulog_settings',
     feedback: 'tetsulog_last_feedback',
     myPage: 'tetsulog_mypage',
-    meals: 'tetsulog_meals',
     dailyNotes: 'tetsulog_daily_notes'
   };
 
@@ -922,7 +884,7 @@
     '脚': ['スクワット', 'フロントスクワット', 'レッグプレス', 'レッグカール', 'レッグエクステンション', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ', 'ヒップスラスト', 'ハムストリングカール', 'アダクション', 'アブダクション'],
     '有酸素': ['ランニング', 'ジョギング', 'ウォーキング', 'エアロバイク', 'バイク', 'トレッドミル', '水泳', 'スイミング', 'HIIT', 'ローイングマシン', '縄跳び', 'サイクリング', 'エリプティカル']
   };
-  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', calorieGoal: null, name: '', photo: null, monthlyGoal: '' };
+  var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', name: '', photo: null, monthlyGoal: '' };
 
   var state = {
     entries: loadJSON(LS.entries, []),
@@ -940,10 +902,8 @@
     feedbackHistory: loadFeedbackHistory(),
     feedbackSelectedDate: todayStr(),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
-    meals: loadJSON(LS.meals, []),
     dailyNotes: loadJSON(LS.dailyNotes, {}),
-    selectedDate: todayStr(),
-    mealSelectedDate: todayStr()
+    selectedDate: todayStr()
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
 
@@ -1995,6 +1955,7 @@
   // snapshot of the most recent training day.
   // ---------------------------------------------------------------------
   var SUMMARY_COLORS = ['#3E9BFF', '#2FD68A', '#FF6B6B', '#FFB020', '#A78BFA', '#F472B6', '#38BDF8', '#FB7185', '#4ADE80', '#FBBF24'];
+  var summaryDay = null; // the training day currently shown in the summary card
   function categoryColor(cat) {
     var idx = state.categories.indexOf(cat);
     if (idx < 0) idx = 0;
@@ -2082,6 +2043,7 @@
     if (!allDates.length) { card.style.display = 'none'; return; }
     allDates.sort(function (a, b) { return a < b ? 1 : -1; });
     var day = allDates[0];
+    summaryDay = day;
     var dayEntries = state.entries.filter(function (e) { return e.date === day; });
 
     var volume = 0, cardioMin = 0;
@@ -2132,7 +2094,7 @@
         var best1RM = items.reduce(function (m, e) { return Math.max(m, e.weight ? estimate1RM(e.weight, e.reps) : 0); }, 0);
         subText = best1RM > 0 ? 'e1RM ' + (Math.round(best1RM * 10) / 10) + 'kg' : '';
       }
-      return '<div class="sc-ex">' +
+      return '<div class="sc-ex" data-exercise="' + escapeHtml(g.name) + '">' +
         '<div class="sc-ex-icon">' + icon + '</div>' +
         '<div class="sc-ex-info"><div class="sc-ex-name"><span class="sc-ex-name-text">' + escapeHtml(g.name) + '</span></div>' +
         (subText ? '<div class="sc-ex-sub">' + subText + '</div>' : '') + '</div>' +
@@ -2151,8 +2113,146 @@
         '<div class="sc-stat vol"><div class="sc-stat-num">' + commaNum(Math.round(volume)) + '</div><div class="sc-stat-label">ボリューム kg</div></div>' +
         '<div class="sc-stat cal"><div class="sc-stat-num">' + calories + '</div><div class="sc-stat-label">カロリー</div></div>' +
       '</div>' +
-      '<div class="sc-ex-list">' + (rowsHtml || '<div class="sc-empty">記録がありません</div>') + '</div>';
+      '<div class="sc-ex-list">' + (rowsHtml || '<div class="sc-empty">記録がありません</div>') + '</div>' +
+      (rowsHtml ? '<div class="sc-hint">種目を長押しで名前・重さ・部位を編集</div>' : '');
     card.style.display = 'block';
+  }
+
+  // ---------------------------------------------------------------------
+  // group edit — long-press an exercise on the summary card to edit its
+  // name, body part (category) and every set's weight/reps at once.
+  // Changes write straight to state.entries, so history reflects them too.
+  // ---------------------------------------------------------------------
+  var editingGroup = null; // { date, ids: [entryId, ...] }
+
+  function openGroupEdit(name) {
+    if (!summaryDay) return;
+    var items = state.entries.filter(function (e) { return e.date === summaryDay && e.name === name; });
+    if (!items.length) return;
+    items.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    var isCardio = items[0].minutes !== undefined;
+    editingGroup = { date: summaryDay, ids: items.map(function (e) { return e.id; }) };
+
+    $('groupEditTitle').textContent = name + 'を編集';
+    $('groupEditName').value = name;
+
+    // category pills (body parts). Hidden for cardio to avoid a type switch.
+    var catField = $('groupEditCategoryField');
+    var pillRow = $('groupEditCategoryPills');
+    if (isCardio) {
+      catField.style.display = 'none';
+      pillRow.innerHTML = '';
+    } else {
+      catField.style.display = 'block';
+      var cur = items[0].category;
+      pillRow.innerHTML = state.categories
+        .filter(function (c) { return c !== '有酸素'; })
+        .map(function (c) {
+          return '<button class="pill' + (c === cur ? ' active' : '') + '" type="button" data-cat="' + escapeHtml(c) + '">' + escapeHtml(c) + '</button>';
+        }).join('');
+      pillRow.querySelectorAll('.pill').forEach(function (p) {
+        p.addEventListener('click', function () {
+          pillRow.querySelectorAll('.pill').forEach(function (x) { x.classList.remove('active'); });
+          p.classList.add('active');
+        });
+      });
+    }
+
+    // per-set inputs
+    $('groupEditSets').innerHTML = items.map(function (e, i) {
+      if (isCardio) {
+        return '<div class="ge-set-row" data-entry-id="' + escapeHtml(e.id) + '">' +
+          '<span class="ge-set-idx">' + (i + 1) + '</span>' +
+          '<div class="field"><label>時間(分)</label><input type="number" class="ge-min" min="1" inputmode="numeric" value="' + (e.minutes != null ? e.minutes : '') + '"></div>' +
+          '<div class="field"><label>距離(km)</label><input type="number" class="ge-dist" step="0.1" min="0" inputmode="decimal" value="' + (e.distance != null ? e.distance : '') + '"></div>' +
+        '</div>';
+      }
+      return '<div class="ge-set-row" data-entry-id="' + escapeHtml(e.id) + '">' +
+        '<span class="ge-set-idx">' + (i + 1) + '</span>' +
+        '<div class="field"><label>重量(kg)</label><input type="number" class="ge-weight" step="0.5" min="0" inputmode="decimal" value="' + (e.weight != null ? e.weight : '') + '"></div>' +
+        '<div class="field"><label>回数</label><input type="number" class="ge-reps" min="1" inputmode="numeric" value="' + (e.reps != null ? e.reps : '') + '"></div>' +
+      '</div>';
+    }).join('');
+
+    $('groupEditOverlay').classList.add('open');
+  }
+
+  function closeGroupEdit() {
+    editingGroup = null;
+    $('groupEditOverlay').classList.remove('open');
+  }
+
+  function saveGroupEdit(ev) {
+    if (ev) ev.preventDefault();
+    if (!editingGroup) return;
+    var newName = $('groupEditName').value.trim();
+    if (!newName) { alert('種目名を入力してください'); return; }
+    var activeCatPill = $('groupEditCategoryPills').querySelector('.pill.active');
+    var newCategory = activeCatPill ? activeCatPill.dataset.cat : null;
+
+    var rows = Array.prototype.slice.call($('groupEditSets').querySelectorAll('.ge-set-row'));
+    var changed = [];
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var id = row.dataset.entryId;
+      var entry = state.entries.filter(function (e) { return e.id === id; })[0];
+      if (!entry) continue;
+      var isCardio = entry.minutes !== undefined;
+      if (isCardio) {
+        var minutes = parseFloat(row.querySelector('.ge-min').value);
+        var distance = parseFloat(row.querySelector('.ge-dist').value);
+        if (!minutes || minutes <= 0) { alert((i + 1) + '番目の時間(分)を入力してください'); return; }
+        entry.minutes = minutes;
+        if (!isNaN(distance) && distance > 0) entry.distance = distance; else delete entry.distance;
+      } else {
+        var weight = parseFloat(row.querySelector('.ge-weight').value);
+        var reps = parseInt(row.querySelector('.ge-reps').value, 10);
+        if (isNaN(weight) || weight < 0) { alert((i + 1) + '番目の重量を入力してください'); return; }
+        if (!reps || reps <= 0) { alert((i + 1) + '番目の回数を入力してください'); return; }
+        entry.weight = weight;
+        entry.reps = reps;
+      }
+      entry.name = newName;
+      if (newCategory && !isCardio) entry.category = newCategory;
+      changed.push(entry);
+    }
+
+    if (cloudHooks) {
+      changed.forEach(function (entry) { cloudHooks.writeEntry(entry); });
+    } else {
+      saveJSON(LS.entries, state.entries);
+    }
+    closeGroupEdit();
+    renderTodayList();
+    renderHistory();
+    refreshDayDetailIfOpen();
+    showToast('種目を更新しました');
+  }
+
+  // long-press on a summary-card exercise row opens the group editor
+  function bindSummaryLongPress(containerEl) {
+    var timer = null, sx = 0, sy = 0, row = null;
+    function cancel() { if (timer) { clearTimeout(timer); timer = null; } row = null; }
+    containerEl.addEventListener('pointerdown', function (ev) {
+      var el = ev.target && ev.target.closest ? ev.target.closest('.sc-ex') : null;
+      if (!el || !el.dataset.exercise) return;
+      row = el; sx = ev.clientX; sy = ev.clientY;
+      timer = setTimeout(function () {
+        timer = null;
+        if (row) {
+          if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+          openGroupEdit(row.dataset.exercise);
+          row = null;
+        }
+      }, 500);
+    });
+    containerEl.addEventListener('pointermove', function (ev) {
+      if (!timer) return;
+      if (Math.abs(ev.clientX - sx) > 10 || Math.abs(ev.clientY - sy) > 10) cancel();
+    });
+    containerEl.addEventListener('pointerup', cancel);
+    containerEl.addEventListener('pointercancel', cancel);
+    containerEl.addEventListener('pointerleave', cancel);
   }
 
   function renderHistory() {
@@ -2350,7 +2450,6 @@
     $('mpHeight').value = mp.height != null ? mp.height : '';
     $('mpAge').value = mp.age != null ? mp.age : '';
     $('mpFrequency').value = mp.frequency != null ? mp.frequency : '';
-    $('mpCalorieGoal').value = mp.calorieGoal != null ? mp.calorieGoal : '';
     $('mpNote').value = mp.note || '';
     document.querySelectorAll('#goalPills .pill').forEach(function (p) {
       p.classList.toggle('active', p.dataset.goal === mp.goal);
@@ -2398,13 +2497,11 @@
       age: parseInt($('mpAge').value, 10) || null,
       frequency: parseInt($('mpFrequency').value, 10) || null,
       goal: selectedGoalEl ? selectedGoalEl.dataset.goal : null,
-      note: $('mpNote').value.trim(),
-      calorieGoal: parseFloat($('mpCalorieGoal').value) || null
+      note: $('mpNote').value.trim()
     };
     saveJSON(LS.myPage, state.myPage);
     if (cloudHooks) cloudHooks.writeProfile();
     renderMyPage();
-    renderMealTodayList();
     showToast('マイページを保存しました');
   });
 
@@ -2479,22 +2576,8 @@
   bindGraphSwipe($('historyGraph'));
 
   // ---------------------------------------------------------------------
-  // meals
+  // image helper (used by profile photo)
   // ---------------------------------------------------------------------
-  var MEAL_ANALYSIS_SYSTEM = 'あなたは栄養士です。食事の写真から、内容物と概算のカロリー・タンパク質・脂質・炭水化物を日本語で推定してください。一般的な分量を仮定した目視による概算で構いません。';
-  var MEAL_SCHEMA = {
-    type: 'object',
-    properties: {
-      description: { type: 'string', description: '写真に写っている食事内容の簡潔な説明(日本語)。' },
-      calories: { type: 'number', description: '推定カロリー(kcal)。' },
-      protein: { type: 'number', description: '推定タンパク質(g)。' },
-      fat: { type: 'number', description: '推定脂質(g)。' },
-      carbs: { type: 'number', description: '推定炭水化物(g)。' }
-    },
-    required: ['description', 'calories', 'protein', 'fat', 'carbs'],
-    additionalProperties: false
-  };
-
   function resizeImageFile(file, maxDim) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
@@ -2513,178 +2596,6 @@
       img.src = url;
     });
   }
-
-  function defaultMealType() {
-    var h = new Date().getHours();
-    if (h < 10) return '朝食';
-    if (h < 15) return '昼食';
-    if (h < 21) return '夕食';
-    return '間食';
-  }
-  function selectMealTypePill(type) {
-    document.querySelectorAll('#mealTypePills .pill').forEach(function (p) { p.classList.toggle('active', p.dataset.mealtype === type); });
-  }
-  document.querySelectorAll('#mealTypePills .pill').forEach(function (p) {
-    p.addEventListener('click', function () { selectMealTypePill(p.dataset.mealtype); });
-  });
-
-  function mealRowHtml(m) {
-    var macros = [];
-    if (m.protein != null) macros.push('P' + m.protein + 'g');
-    if (m.fat != null) macros.push('F' + m.fat + 'g');
-    if (m.carbs != null) macros.push('C' + m.carbs + 'g');
-    var inner = '<div><span class="meal-type-tag">' + escapeHtml(m.mealType) + '</span>' +
-      '<div class="log-name">' + escapeHtml(m.description || '(内容未入力)') + '</div>' +
-      (macros.length ? '<div class="log-meta">' + macros.join(' ・ ') + '</div>' : '') +
-      '</div><div class="log-stat"><div class="log-weight">' + (m.calories != null ? m.calories : '—') + '<span>kcal</span></div></div>';
-    return '<div class="exercise-group">' + setRowWrapHtml(m, inner, 'meal-row') + '</div>';
-  }
-
-  function renderMealTotals(todays) {
-    var totals = todays.reduce(function (acc, m) {
-      acc.calories += m.calories || 0;
-      acc.protein += m.protein || 0;
-      acc.fat += m.fat || 0;
-      acc.carbs += m.carbs || 0;
-      return acc;
-    }, { calories: 0, protein: 0, fat: 0, carbs: 0 });
-    var goal = state.myPage && state.myPage.calorieGoal;
-    var goalHtml = goal
-      ? '<p class="chart-caption" style="margin-top:10px;">目標 ' + goal.toLocaleString() + 'kcal ・ 残り ' + Math.max(0, Math.round(goal - totals.calories)).toLocaleString() + 'kcal</p>'
-      : '';
-    $('mealTotals').innerHTML =
-      '<div class="chart-summary" style="margin-bottom:0;">' +
-        '<div><div class="num">' + Math.round(totals.calories) + '</div><div class="lbl">kcal</div></div>' +
-        '<div><div class="num">' + totals.protein.toFixed(1) + '</div><div class="lbl">P(g)</div></div>' +
-        '<div><div class="num">' + totals.fat.toFixed(1) + '</div><div class="lbl">F(g)</div></div>' +
-        '<div><div class="num">' + totals.carbs.toFixed(1) + '</div><div class="lbl">C(g)</div></div>' +
-      '</div>' + goalHtml;
-  }
-
-  function renderMealTodayList() {
-    var list = $('mealTodayList');
-    if (!list) return;
-    var count = $('mealTodayCount');
-    var selDate = state.mealSelectedDate;
-    var dateLabel = selDate === todayStr() ? '本日' : formatDateLabel(selDate);
-    $('mealListHeading').textContent = dateLabel + 'の記録';
-    var todays = state.meals.filter(function (m) { return m.date === selDate; });
-    count.textContent = todays.length + '件';
-    list.innerHTML = todays.length
-      ? todays.map(mealRowHtml).join('')
-      : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
-    renderMealTotals(todays);
-  }
-
-  function deleteMeal(id) {
-    if (cloudHooks && cloudHooks.deleteMeal) {
-      cloudHooks.deleteMeal(id);
-    } else {
-      state.meals = state.meals.filter(function (m) { return m.id !== id; });
-      saveJSON(LS.meals, state.meals);
-      renderMealTodayList();
-    }
-  }
-
-  function clearMealForm() {
-    $('mealDescription').value = '';
-    $('mealCalories').value = '';
-    $('mealProtein').value = '';
-    $('mealFat').value = '';
-    $('mealCarbs').value = '';
-    var hint = $('mealAnalyzeHint');
-    hint.style.display = 'none';
-    hint.classList.remove('detected');
-  }
-
-  function handleAddMeal(ev) {
-    if (ev) ev.preventDefault();
-    var typeEl = document.querySelector('#mealTypePills .pill.active');
-    var mealType = typeEl ? typeEl.dataset.mealtype : defaultMealType();
-    var description = $('mealDescription').value.trim();
-    var calories = parseFloat($('mealCalories').value);
-    var protein = parseFloat($('mealProtein').value);
-    var fat = parseFloat($('mealFat').value);
-    var carbs = parseFloat($('mealCarbs').value);
-    if (!description && isNaN(calories)) { alert('内容またはカロリーを入力してください'); return; }
-
-    var meal = {
-      id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7),
-      date: state.mealSelectedDate,
-      mealType: mealType,
-      description: description,
-      calories: isNaN(calories) ? null : calories,
-      protein: isNaN(protein) ? null : protein,
-      fat: isNaN(fat) ? null : fat,
-      carbs: isNaN(carbs) ? null : carbs,
-      ts: Date.now()
-    };
-
-    if (cloudHooks && cloudHooks.writeMeal) {
-      cloudHooks.writeMeal(meal);
-    } else {
-      state.meals.push(meal);
-      saveJSON(LS.meals, state.meals);
-    }
-
-    clearMealForm();
-    renderMealTodayList();
-    showToast('食事を記録しました');
-  }
-
-  $('addMealForm').addEventListener('submit', handleAddMeal);
-  $('mealDate').addEventListener('change', function () {
-    state.mealSelectedDate = $('mealDate').value || todayStr();
-    renderMealTodayList();
-  });
-
-  $('mealPhotoBtn').addEventListener('click', function () { $('mealPhotoInput').click(); });
-  $('mealPhotoInput').addEventListener('change', function () {
-    var file = this.files && this.files[0];
-    this.value = '';
-    if (!file) return;
-    if (!state.settings.apiKey) { showToast('先に設定画面でAPIキーを登録してください'); openSettings(); return; }
-
-    var hint = $('mealAnalyzeHint');
-    var photoBtn = $('mealPhotoBtn');
-    hint.style.display = 'block';
-    hint.classList.remove('detected');
-    hint.textContent = '🤖 写真を解析中…';
-    photoBtn.disabled = true;
-
-    resizeImageFile(file, 768).then(function (base64) {
-      return callClaude({
-        apiKey: state.settings.apiKey,
-        model: state.settings.model,
-        system: MEAL_ANALYSIS_SYSTEM,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-            { type: 'text', text: 'この食事の内容とカロリー・栄養素を推定してください。' }
-          ]
-        }],
-        maxTokens: 500,
-        outputFormat: { type: 'json_schema', schema: MEAL_SCHEMA }
-      });
-    }).then(function (text) {
-      var data = JSON.parse(text);
-      $('mealDescription').value = data.description || '';
-      $('mealCalories').value = data.calories != null ? Math.round(data.calories) : '';
-      $('mealProtein').value = data.protein != null ? data.protein : '';
-      $('mealFat').value = data.fat != null ? data.fat : '';
-      $('mealCarbs').value = data.carbs != null ? data.carbs : '';
-      hint.textContent = '🤖 AI解析結果を反映しました(内容を確認・修正してから記録してください)';
-      hint.classList.add('detected');
-      photoBtn.disabled = false;
-    }).catch(function (e) {
-      hint.textContent = '解析に失敗しました: ' + e.message;
-      hint.classList.remove('detected');
-      photoBtn.disabled = false;
-    });
-  });
-
-  selectMealTypePill(defaultMealType());
 
   // ---------------------------------------------------------------------
   // settings
@@ -2706,6 +2617,9 @@
     $('dayDetailOverlay').classList.remove('open');
   });
   $('closeEditEntryBtn').addEventListener('click', closeEditEntry);
+  $('closeGroupEditBtn').addEventListener('click', closeGroupEdit);
+  $('groupEditForm').addEventListener('submit', saveGroupEdit);
+  bindSummaryLongPress($('workoutSummaryCard'));
 
   // ---------------------------------------------------------------------
   // RM calculator
@@ -3036,7 +2950,6 @@
   bindSetRowSwipe($('todayList'), deleteEntry, openEditEntry);
   bindSetRowSwipe($('historyList'), deleteEntry, openEditEntry);
   bindSetRowSwipe($('dayDetailBody'), deleteEntry, openEditEntry);
-  bindSetRowSwipe($('mealTodayList'), deleteMeal);
   bindCalendarClicks($('trainingCalendar'));
 
   // ---------------------------------------------------------------------
@@ -3064,14 +2977,10 @@
   function initDateInputs() {
     var today = todayStr();
     state.selectedDate = today;
-    state.mealSelectedDate = today;
     state.feedbackSelectedDate = today;
     var entryDateEl = $('entryDate');
     entryDateEl.max = today;
     entryDateEl.value = today;
-    var mealDateEl = $('mealDate');
-    mealDateEl.max = today;
-    mealDateEl.value = today;
     var feedbackDateEl = $('feedbackDateInput');
     feedbackDateEl.max = today;
     feedbackDateEl.value = today;
@@ -3084,7 +2993,6 @@
     state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' });
     state.feedbackHistory = loadFeedbackHistory();
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
-    state.meals = loadJSON(LS.meals, []);
     state.dailyNotes = loadJSON(LS.dailyNotes, {});
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
@@ -3098,7 +3006,6 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
-    renderMealTodayList();
   }
 
   function init() {
@@ -3111,7 +3018,6 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
-    renderMealTodayList();
   }
   init();
 
@@ -3149,11 +3055,6 @@
       }
       renderFeedback();
       renderMyPage();
-      renderMealTodayList();
-    },
-    applyCloudMeals: function (list) {
-      state.meals = list;
-      renderMealTodayList();
     },
     reloadFromLocal: reloadFromLocal
   };
@@ -3217,10 +3118,8 @@
   var cloudUser = null;
   var unsubEntries = null;
   var unsubProfile = null;
-  var unsubMeals = null;
 
   function entriesCol() { return collection(db, 'users', cloudUser.uid, 'entries'); }
-  function mealsCol() { return collection(db, 'users', cloudUser.uid, 'meals'); }
   function profileRef() { return doc(db, 'users', cloudUser.uid); }
 
   function updateAuthUI() {
@@ -3289,22 +3188,6 @@
     });
   }
 
-  function writeMeal(meal) {
-    if (!cloudUser) return;
-    setDoc(doc(mealsCol(), meal.id), meal).catch(function (e) {
-      console.warn('[鉄ログ] meal sync failed', e);
-      if (window.TetsuLogApp) window.TetsuLogApp.showToast('同期に失敗しました: ' + e.message);
-    });
-  }
-
-  function deleteMealCloud(id) {
-    if (!cloudUser) return;
-    deleteDoc(doc(mealsCol(), id)).catch(function (e) {
-      console.warn('[鉄ログ] meal delete failed', e);
-      if (window.TetsuLogApp) window.TetsuLogApp.showToast('削除に失敗しました: ' + e.message);
-    });
-  }
-
   async function subscribeCloud() {
     var ref = profileRef();
     var snap;
@@ -3332,10 +3215,6 @@
         for (var i = 0; i < localEntries.length; i++) {
           await setDoc(doc(entriesCol(), localEntries[i].id), localEntries[i]);
         }
-        var localMeals = local.meals.slice();
-        for (var j = 0; j < localMeals.length; j++) {
-          await setDoc(doc(mealsCol(), localMeals[j].id), localMeals[j]);
-        }
         window.TetsuLogApp.showToast('この端末の記録をクラウドに移行しました');
       } catch (e) {
         console.warn('[鉄ログ] initial migration failed', e);
@@ -3352,12 +3231,6 @@
       qs.forEach(function (d) { list.push(d.data()); });
       window.TetsuLogApp.applyCloudEntries(list);
     });
-
-    unsubMeals = onSnapshot(mealsCol(), function (qs) {
-      var list = [];
-      qs.forEach(function (d) { list.push(d.data()); });
-      window.TetsuLogApp.applyCloudMeals(list);
-    });
   }
 
   onAuthStateChanged(auth, function (user) {
@@ -3365,12 +3238,11 @@
     updateAuthUI();
     if (!window.TetsuLogApp) return;
     if (cloudUser) {
-      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud, writeMeal: writeMeal, deleteMeal: deleteMealCloud });
+      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud });
       subscribeCloud();
     } else {
       if (unsubEntries) { unsubEntries(); unsubEntries = null; }
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
-      if (unsubMeals) { unsubMeals(); unsubMeals = null; }
       window.TetsuLogApp.setCloudHooks(null);
       window.TetsuLogApp.reloadFromLocal();
     }
