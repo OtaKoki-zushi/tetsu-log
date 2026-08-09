@@ -507,17 +507,10 @@
   <section class="screen" id="screen-progress">
     <div class="screen-header">
       <h2 class="screen-title">進捗</h2>
-      <p class="screen-desc">合計負荷量を振り返れます。</p>
+      <p class="screen-desc">直近のワークアウトのまとめを振り返れます。</p>
     </div>
 
     <div class="summary-card" id="workoutSummaryCard" style="display:none"></div>
-
-    <div class="card" id="loadCompareCard">
-      <span class="card-label">合計負荷量</span>
-      <div id="loadCompareRow"></div>
-    </div>
-
-    <button type="button" class="btn btn-outline" id="openRmCalcBtn">🧮 RM計算機を開く</button>
   </section>
 
   <!-- ===== フィードバック ===== -->
@@ -1569,10 +1562,10 @@
       body.innerHTML = '<p class="empty-note">この日の記録はありません。</p>';
       return;
     }
-    var groups = groupEntriesByName(dayEntries);
+    // まとめカード(KOKI'S LOG)のみ表示。下の一覧は同じ内容の重複だったため削除。
+    // 編集はカードの種目を長押しで行える。
     body.innerHTML =
-      '<div class="summary-card" style="margin-bottom:16px;">' + buildSummaryCardHtml(dateStr, true) + '</div>' +
-      '<div class="log-list">' + groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: dateStr }); }).join('') + '</div>';
+      '<div class="summary-card">' + buildSummaryCardHtml(dateStr, true) + '</div>';
   }
 
   function openDayDetail(dateStr) {
@@ -2952,13 +2945,16 @@
   }
   $('rmCalcWeight').addEventListener('input', updateRmCalc);
   $('rmCalcReps').addEventListener('input', updateRmCalc);
-  $('openRmCalcBtn').addEventListener('click', function () {
-    $('rmCalcWeight').value = '';
-    $('rmCalcReps').value = '';
-    $('rmCalcResultCard').style.display = 'none';
-    $('rmCalcTable').innerHTML = '';
-    $('rmCalcOverlay').classList.add('open');
-  });
+  var openRmCalcBtn = $('openRmCalcBtn');
+  if (openRmCalcBtn) {
+    openRmCalcBtn.addEventListener('click', function () {
+      $('rmCalcWeight').value = '';
+      $('rmCalcReps').value = '';
+      $('rmCalcResultCard').style.display = 'none';
+      $('rmCalcTable').innerHTML = '';
+      $('rmCalcOverlay').classList.add('open');
+    });
+  }
   $('closeRmCalcBtn').addEventListener('click', function () { $('rmCalcOverlay').classList.remove('open'); });
 
   // ---------------------------------------------------------------------
