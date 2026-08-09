@@ -336,8 +336,12 @@
   #chartOverlay { z-index: 51; }
   #editEntryOverlay { z-index: 52; }
   #groupEditOverlay { z-index: 53; }
-  .ge-set-row { display: grid; grid-template-columns: auto 1fr 1fr; align-items: end; gap: 10px; margin-bottom: 10px; }
+  .ge-set-row { display: grid; grid-template-columns: auto 1fr 1fr auto; align-items: end; gap: 10px; margin-bottom: 10px; }
   .ge-set-idx { font-size: 12px; color: var(--text-muted); font-weight: 700; padding-bottom: 12px; }
+  .ge-set-del { border: none; background: transparent; color: var(--text-faint); font-size: 20px; line-height: 1; padding: 0 4px 10px; cursor: pointer; align-self: end; }
+  .ge-set-del:hover { color: var(--accent); }
+  .ge-add-set { width: 100%; margin-top: 2px; border: 1px dashed var(--border); background: transparent; color: var(--text-muted); border-radius: 12px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .ge-add-set:hover { border-color: var(--accent); color: var(--accent); }
   .inbody-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
   .inbody-row { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
   .inbody-thumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); flex-shrink: 0; cursor: pointer; }
@@ -481,15 +485,7 @@
     </div>
 
     <div class="record-scroll">
-      <div>
-        <div class="section-heading">
-          <h3 id="todayHeading">本日の記録</h3>
-          <span id="todayCount"></span>
-        </div>
-        <div class="log-list" id="todayList"></div>
-      </div>
-
-      <div class="cta-bar">
+      <div class="cta-bar" style="margin-top:auto;">
         <button class="btn btn-primary" id="gotoFeedbackBtn" type="button">フィードバックをもらう →</button>
       </div>
     </div>
@@ -659,7 +655,7 @@
   <div class="bottom-nav">
     <button class="nav-item active" data-target="record" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
-      <span>記録</span>
+      <span>Record</span>
     </button>
     <button class="nav-item" data-target="history" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
@@ -667,7 +663,7 @@
     </button>
     <button class="nav-item" data-target="progress" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
-      <span>進捗</span>
+      <span>Progress</span>
     </button>
     <button class="nav-item" data-target="inbody" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><circle cx="12" cy="8" r="2.2"></circle><path d="M8 14h8"></path><path d="M8 17h5"></path></svg>
@@ -675,7 +671,7 @@
     </button>
     <button class="nav-item" data-target="feedback" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
-      <span>フィードバック</span>
+      <span>Feedback</span>
     </button>
   </div>
 
@@ -796,6 +792,7 @@
         <div style="height:12px"></div>
         <div class="section-heading"><h3>各セット</h3></div>
         <div id="groupEditSets"></div>
+        <button type="button" class="ge-add-set" id="groupEditAddSet">＋ セットを追加</button>
         <div style="height:14px"></div>
         <button class="btn btn-primary" type="submit">保存する</button>
       </form>
@@ -1574,7 +1571,7 @@
     }
     var groups = groupEntriesByName(dayEntries);
     body.innerHTML =
-      '<div class="summary-card" style="margin-bottom:16px;">' + buildSummaryCardHtml(dateStr, false) + '</div>' +
+      '<div class="summary-card" style="margin-bottom:16px;">' + buildSummaryCardHtml(dateStr, true) + '</div>' +
       '<div class="log-list">' + groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: dateStr }); }).join('') + '</div>';
   }
 
@@ -1593,6 +1590,7 @@
     var heading = $('todayHeading');
     var count = $('todayCount');
     var list = $('todayList');
+    if (!list) return; // 本日の記録欄は削除済み（履歴の日付タップで確認）
     var selDate = state.selectedDate;
     var dateLabel = selDate === todayStr() ? '本日' : formatDateLabel(selDate);
     if (!state.activeCategory) {
@@ -2192,13 +2190,44 @@
   // ---------------------------------------------------------------------
   var editingGroup = null; // { date, ids: [entryId, ...] }
 
-  function openGroupEdit(name) {
-    if (!summaryDay) return;
-    var items = state.entries.filter(function (e) { return e.date === summaryDay && e.name === name; });
+  // Builds one editable set row. `e` may be {} for a brand-new (unsaved) set.
+  function geSetRowHtml(e, i, isCardio) {
+    e = e || {};
+    var idAttr = e.id ? escapeHtml(e.id) : '';
+    var del = '<button type="button" class="ge-set-del" aria-label="このセットを削除">×</button>';
+    if (isCardio) {
+      return '<div class="ge-set-row" data-entry-id="' + idAttr + '">' +
+        '<span class="ge-set-idx">' + (i + 1) + '</span>' +
+        '<div class="field"><label>時間(分)</label><input type="number" class="ge-min" min="1" inputmode="numeric" value="' + (e.minutes != null ? e.minutes : '') + '"></div>' +
+        '<div class="field"><label>距離(km)</label><input type="number" class="ge-dist" step="0.1" min="0" inputmode="decimal" value="' + (e.distance != null ? e.distance : '') + '"></div>' +
+        del +
+      '</div>';
+    }
+    return '<div class="ge-set-row" data-entry-id="' + idAttr + '">' +
+      '<span class="ge-set-idx">' + (i + 1) + '</span>' +
+      '<div class="field"><label>重量(kg)</label><input type="number" class="ge-weight" step="0.5" min="0" inputmode="decimal" value="' + (e.weight != null ? e.weight : '') + '"></div>' +
+      '<div class="field"><label>回数</label><input type="number" class="ge-reps" min="1" inputmode="numeric" value="' + (e.reps != null ? e.reps : '') + '"></div>' +
+      del +
+    '</div>';
+  }
+
+  // Renumbers the .ge-set-idx labels after a row is added or removed.
+  function renumberGroupEditSets() {
+    var rows = $('groupEditSets').querySelectorAll('.ge-set-row');
+    for (var i = 0; i < rows.length; i++) {
+      var idx = rows[i].querySelector('.ge-set-idx');
+      if (idx) idx.textContent = i + 1;
+    }
+  }
+
+  function openGroupEdit(name, day) {
+    day = day || summaryDay;
+    if (!day) return;
+    var items = state.entries.filter(function (e) { return e.date === day && e.name === name; });
     if (!items.length) return;
     items.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
     var isCardio = items[0].minutes !== undefined;
-    editingGroup = { date: summaryDay, ids: items.map(function (e) { return e.id; }) };
+    editingGroup = { date: day, ids: items.map(function (e) { return e.id; }), isCardio: isCardio, category: items[0].category };
 
     $('groupEditTitle').textContent = name + 'を編集';
     $('groupEditName').value = name;
@@ -2226,20 +2255,7 @@
     }
 
     // per-set inputs
-    $('groupEditSets').innerHTML = items.map(function (e, i) {
-      if (isCardio) {
-        return '<div class="ge-set-row" data-entry-id="' + escapeHtml(e.id) + '">' +
-          '<span class="ge-set-idx">' + (i + 1) + '</span>' +
-          '<div class="field"><label>時間(分)</label><input type="number" class="ge-min" min="1" inputmode="numeric" value="' + (e.minutes != null ? e.minutes : '') + '"></div>' +
-          '<div class="field"><label>距離(km)</label><input type="number" class="ge-dist" step="0.1" min="0" inputmode="decimal" value="' + (e.distance != null ? e.distance : '') + '"></div>' +
-        '</div>';
-      }
-      return '<div class="ge-set-row" data-entry-id="' + escapeHtml(e.id) + '">' +
-        '<span class="ge-set-idx">' + (i + 1) + '</span>' +
-        '<div class="field"><label>重量(kg)</label><input type="number" class="ge-weight" step="0.5" min="0" inputmode="decimal" value="' + (e.weight != null ? e.weight : '') + '"></div>' +
-        '<div class="field"><label>回数</label><input type="number" class="ge-reps" min="1" inputmode="numeric" value="' + (e.reps != null ? e.reps : '') + '"></div>' +
-      '</div>';
-    }).join('');
+    $('groupEditSets').innerHTML = items.map(function (e, i) { return geSetRowHtml(e, i, isCardio); }).join('');
 
     $('groupEditOverlay').classList.add('open');
   }
@@ -2256,36 +2272,62 @@
     if (!newName) { alert('種目名を入力してください'); return; }
     var activeCatPill = $('groupEditCategoryPills').querySelector('.pill.active');
     var newCategory = activeCatPill ? activeCatPill.dataset.cat : null;
+    var isCardio = editingGroup.isCardio;
 
     var rows = Array.prototype.slice.call($('groupEditSets').querySelectorAll('.ge-set-row'));
-    var changed = [];
+    if (!rows.length) { alert('セットを1つ以上残してください'); return; }
+
+    // Validate every row up-front so a bad input aborts before any change.
+    var parsed = [];
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
-      var id = row.dataset.entryId;
-      var entry = state.entries.filter(function (e) { return e.id === id; })[0];
-      if (!entry) continue;
-      var isCardio = entry.minutes !== undefined;
       if (isCardio) {
         var minutes = parseFloat(row.querySelector('.ge-min').value);
         var distance = parseFloat(row.querySelector('.ge-dist').value);
         if (!minutes || minutes <= 0) { alert((i + 1) + '番目の時間(分)を入力してください'); return; }
-        entry.minutes = minutes;
-        if (!isNaN(distance) && distance > 0) entry.distance = distance; else delete entry.distance;
+        parsed.push({ id: row.dataset.entryId, minutes: minutes, distance: (!isNaN(distance) && distance > 0) ? distance : null });
       } else {
         var weight = parseFloat(row.querySelector('.ge-weight').value);
         var reps = parseInt(row.querySelector('.ge-reps').value, 10);
         if (isNaN(weight) || weight < 0) { alert((i + 1) + '番目の重量を入力してください'); return; }
         if (!reps || reps <= 0) { alert((i + 1) + '番目の回数を入力してください'); return; }
-        entry.weight = weight;
-        entry.reps = reps;
+        parsed.push({ id: row.dataset.entryId, weight: weight, reps: reps });
+      }
+    }
+
+    // Update existing rows, create new ones (empty data-entry-id).
+    var seen = {};
+    var toWrite = [];
+    var baseTs = Date.now();
+    parsed.forEach(function (p, idx) {
+      var entry = p.id ? state.entries.filter(function (e) { return e.id === p.id; })[0] : null;
+      if (!entry) {
+        entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: editingGroup.date, ts: baseTs + idx };
+        state.entries.push(entry);
       }
       entry.name = newName;
-      if (newCategory && !isCardio) entry.category = newCategory;
-      changed.push(entry);
+      if (isCardio) {
+        entry.minutes = p.minutes;
+        if (p.distance != null) entry.distance = p.distance; else delete entry.distance;
+        if (!entry.category) entry.category = editingGroup.category;
+      } else {
+        entry.weight = p.weight;
+        entry.reps = p.reps;
+        entry.category = newCategory || entry.category || editingGroup.category;
+      }
+      seen[entry.id] = true;
+      toWrite.push(entry);
+    });
+
+    // Any original set whose row was removed gets deleted.
+    var toDelete = (editingGroup.ids || []).filter(function (id) { return !seen[id]; });
+    if (toDelete.length) {
+      state.entries = state.entries.filter(function (e) { return toDelete.indexOf(e.id) === -1; });
     }
 
     if (cloudHooks) {
-      changed.forEach(function (entry) { cloudHooks.writeEntry(entry); });
+      toWrite.forEach(function (entry) { cloudHooks.writeEntry(entry); });
+      toDelete.forEach(function (id) { cloudHooks.deleteEntry(id); });
     } else {
       saveJSON(LS.entries, state.entries);
     }
@@ -2297,7 +2339,8 @@
   }
 
   // long-press on a summary-card exercise row opens the group editor
-  function bindSummaryLongPress(containerEl) {
+  function bindSummaryLongPress(containerEl, getDay) {
+    if (!containerEl) return;
     var timer = null, sx = 0, sy = 0, row = null;
     function cancel() { if (timer) { clearTimeout(timer); timer = null; } row = null; }
     containerEl.addEventListener('pointerdown', function (ev) {
@@ -2308,7 +2351,7 @@
         timer = null;
         if (row) {
           if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
-          openGroupEdit(row.dataset.exercise);
+          openGroupEdit(row.dataset.exercise, getDay ? getDay() : null);
           row = null;
         }
       }, 500);
@@ -2865,7 +2908,24 @@
   $('closeEditEntryBtn').addEventListener('click', closeEditEntry);
   $('closeGroupEditBtn').addEventListener('click', closeGroupEdit);
   $('groupEditForm').addEventListener('submit', saveGroupEdit);
+  // add / remove a set inside the group editor
+  $('groupEditAddSet').addEventListener('click', function () {
+    if (!editingGroup) return;
+    var container = $('groupEditSets');
+    var count = container.querySelectorAll('.ge-set-row').length;
+    container.insertAdjacentHTML('beforeend', geSetRowHtml({}, count, editingGroup.isCardio));
+  });
+  $('groupEditSets').addEventListener('click', function (ev) {
+    var del = ev.target.closest ? ev.target.closest('.ge-set-del') : null;
+    if (!del) return;
+    var rows = $('groupEditSets').querySelectorAll('.ge-set-row');
+    if (rows.length <= 1) { alert('セットを1つ以上残してください'); return; }
+    var row = del.closest('.ge-set-row');
+    if (row) { row.parentNode.removeChild(row); renumberGroupEditSets(); }
+  });
   bindSummaryLongPress($('workoutSummaryCard'));
+  // History → day detail: long-press a summary-card exercise to edit it too
+  bindSummaryLongPress($('dayDetailBody'), function () { return openDayDetailDate; });
 
   // ---------------------------------------------------------------------
   // RM calculator
