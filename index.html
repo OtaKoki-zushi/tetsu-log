@@ -135,6 +135,15 @@
 
   h2.screen-title { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
   .screen-desc { font-size: 12.5px; color: var(--text-muted); margin: 2px 0 0; line-height: 1.6; }
+  .screen-header {
+    text-align: center;
+    background: var(--accent);
+    margin: -16px -20px 18px;
+    padding: 18px 22px 16px;
+    border-radius: 0 0 20px 20px;
+  }
+  .screen-header .screen-title { color: var(--accent-ink); }
+  .screen-header .screen-desc { color: rgba(255, 248, 240, 0.82); }
 
   .pillrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
   .pill {
@@ -397,7 +406,7 @@
 
   <!-- ===== 記録 ===== -->
   <section class="screen active" id="screen-record">
-    <div>
+    <div class="screen-header">
       <h2 class="screen-title">今日のトレーニング</h2>
       <p class="screen-desc">種目名を入力すると部位を自動判定します。違っていれば下のピルで手動修正できます。</p>
     </div>
@@ -467,35 +476,19 @@
 
   <!-- ===== 履歴 ===== -->
   <section class="screen" id="screen-history">
-    <div>
-      <h2 class="screen-title">履歴</h2>
-      <p class="screen-desc">部位ごとに絞り込んで振り返れます。</p>
+    <div class="screen-header">
+      <h2 class="screen-title">History</h2>
+      <p class="screen-desc">日付をタップするとその日の記録を見られます。</p>
     </div>
 
-    <div class="pillrow" id="historyPills"></div>
-
-    <div class="seg-toggle" id="historyViewToggle">
-      <button type="button" class="seg-btn active" data-view="list">リスト</button>
-      <button type="button" class="seg-btn" data-view="graph">グラフ</button>
+    <div class="card">
+      <div id="historyCalendar"></div>
     </div>
-    <div class="pillrow" id="exercisePills" style="display:none"></div>
-    <div class="seg-toggle" id="graphGranularityToggle" style="display:none; margin-top:8px;">
-      <button type="button" class="seg-btn active" data-granularity="week">週ごと</button>
-      <button type="button" class="seg-btn" data-granularity="day">日ごと</button>
-    </div>
-
-    <div id="historyList"></div>
-    <div class="cal-nav" id="graphWeekNav" style="display:none; margin-top:8px;">
-      <button type="button" class="icon-btn" id="graphWeekPrevBtn" aria-label="前の週">‹</button>
-      <span class="cal-month-label" id="graphWeekLabel"></span>
-      <button type="button" class="icon-btn" id="graphWeekNextBtn" aria-label="次の週">›</button>
-    </div>
-    <div id="historyGraph" style="display:none"></div>
   </section>
 
   <!-- ===== 進捗 ===== -->
   <section class="screen" id="screen-progress">
-    <div>
+    <div class="screen-header">
       <h2 class="screen-title">進捗</h2>
       <p class="screen-desc">今月の目標や記録日数、合計負荷量を振り返れます。</p>
     </div>
@@ -535,7 +528,7 @@
 
   <!-- ===== フィードバック ===== -->
   <section class="screen" id="screen-feedback">
-    <div>
+    <div class="screen-header">
       <h2 class="screen-title">AIフィードバック</h2>
       <p class="screen-desc">選んだ日の記録をもとに、Claudeが評価します。</p>
     </div>
@@ -556,7 +549,7 @@
 
   <!-- ===== マイページ ===== -->
   <section class="screen" id="screen-mypage">
-    <div>
+    <div class="screen-header">
       <h2 class="screen-title">マイページ</h2>
       <p class="screen-desc">体重や目的を記録しておけます。ログイン中はクラウドに同期されます。</p>
     </div>
@@ -624,7 +617,7 @@
     </button>
     <button class="nav-item" data-target="history" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
-      <span>履歴</span>
+      <span>History</span>
     </button>
     <button class="nav-item" data-target="progress" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
@@ -1264,6 +1257,7 @@
   }
 
   function bindExerciseGroupToggle(containerEl) {
+    if (!containerEl) return;
     containerEl.addEventListener('click', function (ev) {
       var chartBtn = ev.target.closest('.chart-btn');
       if (chartBtn) { openChart(chartBtn.dataset.exercise); return; }
@@ -1284,6 +1278,7 @@
   // innerHTML, so this binds once per container (event delegation) rather
   // than per row.
   function bindSetRowSwipe(containerEl, onDelete, onLongPress) {
+    if (!containerEl) return;
     var DRAG_MAX = 72;
     var OPEN_THRESHOLD = 36;
     var LONG_PRESS_MS = 500;
@@ -1442,8 +1437,6 @@
   var openDayDetailDate = null;
 
   function renderCalendar() {
-    var container = $('trainingCalendar');
-    if (!container) return;
     var now = new Date();
     now.setHours(0, 0, 0, 0);
     if (!calendarMonth) calendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1472,25 +1465,30 @@
         '</button>';
     }
 
-    container.innerHTML =
+    var html =
       '<div class="cal-nav">' +
-        '<button type="button" class="icon-btn" id="calPrevBtn" aria-label="前の月">‹</button>' +
+        '<button type="button" class="icon-btn cal-prev" aria-label="前の月">‹</button>' +
         '<span class="cal-month-label">' + year + '年' + (month + 1) + '月</span>' +
-        '<button type="button" class="icon-btn" id="calNextBtn" aria-label="次の月"' + (isCurrentMonth ? ' disabled' : '') + '>›</button>' +
+        '<button type="button" class="icon-btn cal-next" aria-label="次の月"' + (isCurrentMonth ? ' disabled' : '') + '>›</button>' +
       '</div>' +
       '<div class="cal-weekdays">' + ['日', '月', '火', '水', '木', '金', '土'].map(function (w) { return '<span>' + w + '</span>'; }).join('') + '</div>' +
       '<div class="cal-grid">' + cellsHtml + '</div>';
 
-    $('calPrevBtn').addEventListener('click', function () {
-      calendarMonth = new Date(year, month - 1, 1);
-      renderCalendar();
-    });
-    if (!isCurrentMonth) {
-      $('calNextBtn').addEventListener('click', function () {
+    ['trainingCalendar', 'historyCalendar'].forEach(function (id) {
+      var container = $(id);
+      if (!container) return;
+      container.innerHTML = html;
+      var prev = container.querySelector('.cal-prev');
+      var next = container.querySelector('.cal-next');
+      if (prev) prev.addEventListener('click', function () {
+        calendarMonth = new Date(year, month - 1, 1);
+        renderCalendar();
+      });
+      if (next && !isCurrentMonth) next.addEventListener('click', function () {
         calendarMonth = new Date(year, month + 1, 1);
         renderCalendar();
       });
-    }
+    });
   }
 
   function bindCalendarClicks(containerEl) {
@@ -1707,6 +1705,7 @@
   // rendering — history screen
   // ---------------------------------------------------------------------
   function renderHistoryPills() {
+    if (!$('historyPills')) return;
     var row = $('historyPills');
     row.innerHTML = '';
     ['すべて'].concat(state.categories).forEach(function (cat) {
@@ -1770,6 +1769,7 @@
   }
 
   function renderExercisePills() {
+    if (!$('exercisePills')) return;
     var row = $('exercisePills');
     var cat = state.historyFilter;
     var names = Array.from(new Set(state.entries.filter(function (e) { return cat === 'すべて' || e.category === cat; }).map(function (e) { return e.name; })));
@@ -1789,6 +1789,7 @@
   }
 
   function renderGraphWeekNav(weekStart, weekEnd) {
+    if (!$('graphWeekLabel')) return;
     var today = todayStr();
     var isCurrentWeek = weekStart <= today && today <= weekEnd;
     $('graphWeekLabel').textContent = formatShortDate(weekStart) + ' 〜 ' + formatShortDate(weekEnd);
@@ -1796,6 +1797,7 @@
   }
 
   function renderHistoryGraph() {
+    if (!$('historyGraph')) return;
     var container = $('historyGraph');
     var cat = state.historyFilter;
     var exFilter = state.exerciseFilter || 'すべて';
@@ -1858,6 +1860,7 @@
   }
 
   function bindGraphSwipe(containerEl) {
+    if (!containerEl) return;
     var startX = null, startY = null, tracking = false;
     containerEl.addEventListener('pointerdown', function (ev) {
       if (state.graphGranularity !== 'week') return;
@@ -2265,6 +2268,7 @@
       renderHistoryGraph();
     }
     var container = $('historyList');
+    if (!container) return; // History screen is calendar-only; no list to render
     var dates = Array.from(new Set(state.entries.map(function (e) { return e.date; }))).sort(function (a, b) { return a < b ? 1 : -1; });
     if (!dates.length) { container.innerHTML = '<p class="empty-note">まだ記録がありません。</p>'; return; }
 
@@ -2564,11 +2568,11 @@
       renderHistoryGraph();
     });
   });
-  $('graphWeekPrevBtn').addEventListener('click', function () {
+  if ($('graphWeekPrevBtn')) $('graphWeekPrevBtn').addEventListener('click', function () {
     state.graphWeekStart = addDaysToDateStr(state.graphWeekStart, -7);
     renderHistoryGraph();
   });
-  $('graphWeekNextBtn').addEventListener('click', function () {
+  if ($('graphWeekNextBtn')) $('graphWeekNextBtn').addEventListener('click', function () {
     if (this.disabled) return;
     state.graphWeekStart = addDaysToDateStr(state.graphWeekStart, 7);
     renderHistoryGraph();
@@ -2951,6 +2955,7 @@
   bindSetRowSwipe($('historyList'), deleteEntry, openEditEntry);
   bindSetRowSwipe($('dayDetailBody'), deleteEntry, openEditEntry);
   bindCalendarClicks($('trainingCalendar'));
+  bindCalendarClicks($('historyCalendar'));
 
   // ---------------------------------------------------------------------
   // add custom body-part category
