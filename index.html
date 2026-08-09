@@ -131,6 +131,14 @@
   .screen::-webkit-scrollbar { display: none; }
   .screen.active { display: flex; animation: rise 0.28s ease both; }
   @media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
+  /* 記録画面: 入力フォームは固定し、本日の記録リストだけをスクロール */
+  #screen-record.active { overflow: hidden; }
+  .record-scroll {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 18px;
+    -ms-overflow-style: none; scrollbar-width: none;
+  }
+  .record-scroll::-webkit-scrollbar { display: none; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
   h2.screen-title { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
@@ -472,16 +480,18 @@
       </div>
     </div>
 
-    <div>
-      <div class="section-heading">
-        <h3 id="todayHeading">本日の記録</h3>
-        <span id="todayCount"></span>
+    <div class="record-scroll">
+      <div>
+        <div class="section-heading">
+          <h3 id="todayHeading">本日の記録</h3>
+          <span id="todayCount"></span>
+        </div>
+        <div class="log-list" id="todayList"></div>
       </div>
-      <div class="log-list" id="todayList"></div>
-    </div>
 
-    <div class="cta-bar">
-      <button class="btn btn-primary" id="gotoFeedbackBtn" type="button">フィードバックをもらう →</button>
+      <div class="cta-bar">
+        <button class="btn btn-primary" id="gotoFeedbackBtn" type="button">フィードバックをもらう →</button>
+      </div>
     </div>
   </section>
 
@@ -1562,15 +1572,9 @@
       body.innerHTML = '<p class="empty-note">この日の記録はありません。</p>';
       return;
     }
-    var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * (e.sets || 1); }, 0);
-    var cardioMin = dayEntries.filter(function (e) { return e.minutes != null; }).reduce(function (s, e) { return s + e.minutes; }, 0);
-    var cardioKm = dayEntries.filter(function (e) { return e.distance != null; }).reduce(function (s, e) { return s + e.distance; }, 0);
-    var volParts = [];
-    if (strengthVol > 0) volParts.push('総ボリューム ' + strengthVol.toLocaleString() + 'kg');
-    if (cardioMin > 0) volParts.push('有酸素 ' + cardioMin + '分' + (cardioKm > 0 ? ' ・ ' + cardioKm.toFixed(1) + 'km' : ''));
     var groups = groupEntriesByName(dayEntries);
     body.innerHTML =
-      (volParts.length ? '<p class="chart-caption" style="margin:0 0 14px;">' + volParts.join(' ・ ') + '</p>' : '') +
+      '<div class="summary-card" style="margin-bottom:16px;">' + buildSummaryCardHtml(dateStr, false) + '</div>' +
       '<div class="log-list">' + groups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: true, compareDate: dateStr }); }).join('') + '</div>';
   }
 
@@ -2101,8 +2105,14 @@
     var allDates = Array.from(new Set(state.entries.map(function (e) { return e.date; })));
     if (!allDates.length) { card.style.display = 'none'; return; }
     allDates.sort(function (a, b) { return a < b ? 1 : -1; });
-    var day = allDates[0];
-    summaryDay = day;
+    summaryDay = allDates[0];
+    card.innerHTML = buildSummaryCardHtml(summaryDay, true);
+    card.style.display = 'block';
+  }
+
+  // Builds the inner HTML of the workout-summary card for a given day.
+  // showHint adds the long-press edit hint (only where long-press is bound).
+  function buildSummaryCardHtml(day, showHint) {
     var dayEntries = state.entries.filter(function (e) { return e.date === day; });
 
     var volume = 0, cardioMin = 0;
@@ -2113,7 +2123,7 @@
     // Rough estimate (no real metabolic data): ~0.024 kcal per kg lifted,
     // ~6 kcal per minute of cardio.
     var calories = Math.round(volume * 0.024 + cardioMin * 6);
-    var totalDays = allDates.length;
+    var totalDays = new Set(state.entries.map(function (e) { return e.date; })).size;
 
     var catVol = {};
     dayEntries.forEach(function (e) {
@@ -2161,8 +2171,7 @@
       '</div>';
     }).join('');
 
-    card.innerHTML =
-      captionHtml +
+    return captionHtml +
       '<div class="sc-top">' +
         '<div><div class="sc-brand">KOKI\'S LOG</div><div class="sc-date">' + formatSummaryDate(day) + durationHtml + '</div></div>' +
         '<div class="sc-ring">' + ringSvg + '</div>' +
@@ -2173,8 +2182,7 @@
         '<div class="sc-stat cal"><div class="sc-stat-num">' + calories + '</div><div class="sc-stat-label">カロリー</div></div>' +
       '</div>' +
       '<div class="sc-ex-list">' + (rowsHtml || '<div class="sc-empty">記録がありません</div>') + '</div>' +
-      (rowsHtml ? '<div class="sc-hint">種目を長押しで名前・重さ・部位を編集</div>' : '');
-    card.style.display = 'block';
+      (showHint && rowsHtml ? '<div class="sc-hint">種目を長押しで名前・重さ・部位を編集</div>' : '');
   }
 
   // ---------------------------------------------------------------------
