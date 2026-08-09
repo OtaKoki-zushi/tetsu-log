@@ -601,7 +601,7 @@
   <section class="screen" id="screen-inbody">
     <div class="screen-header">
       <h2 class="screen-title">InBody</h2>
-      <p class="screen-desc">結果表を撮ると主要な数値をAIが自動入力します。手直しもできます。</p>
+      <p class="screen-desc">InBody・EVOLT 360などの結果表を撮ると主要な数値をAIが自動入力します。手直しもできます。</p>
     </div>
 
     <form class="card" id="addInbodyForm">
@@ -626,9 +626,20 @@
           <div class="field"><label>体脂肪率 (%)</label><input type="number" id="inbodyFat" step="0.1" min="0" inputmode="decimal"></div>
           <div class="field"><label>骨格筋量 (kg)</label><input type="number" id="inbodyMuscle" step="0.1" min="0" inputmode="decimal"></div>
         </div>
-        <div class="field-trio two-col">
+        <div class="field-trio">
+          <div class="field"><label>除脂肪量 (kg)</label><input type="number" id="inbodyLeanMass" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>体脂肪量 (kg)</label><input type="number" id="inbodyFatMass" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>体水分 (kg)</label><input type="number" id="inbodyBodyWater" step="0.1" min="0" inputmode="decimal"></div>
+        </div>
+        <div class="field-trio">
+          <div class="field"><label>タンパク質 (kg)</label><input type="number" id="inbodyProtein" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>ミネラル (kg)</label><input type="number" id="inbodyMineral" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>内臓脂肪Lv</label><input type="number" id="inbodyVisceral" step="1" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="field-trio">
+          <div class="field"><label>基礎代謝 (kcal)</label><input type="number" id="inbodyBmr" step="1" min="0" inputmode="numeric"></div>
           <div class="field"><label>BMI</label><input type="number" id="inbodyBmi" step="0.1" min="0" inputmode="decimal"></div>
-          <div class="field"><label>スコア (任意)</label><input type="number" id="inbodyScore" min="0" inputmode="numeric"></div>
+          <div class="field"><label>スコア (任意)</label><input type="number" id="inbodyScore" step="0.1" min="0" inputmode="decimal"></div>
         </div>
         <div class="field"><label>メモ (任意)</label><input type="text" id="inbodyMemo" placeholder="例）減量2週目 / 体調メモなど" autocomplete="off"></div>
       </div>
@@ -2705,18 +2716,25 @@
   // InBody records — photo of the body-composition sheet + key numbers.
   // AI (Claude vision) extracts the main figures; everything is editable.
   // ---------------------------------------------------------------------
-  var INBODY_ANALYSIS_SYSTEM = 'あなたはInBodyなどの体組成計の結果表を読み取るアシスタントです。画像から主要な数値を抽出してください。読み取れない項目はnullにしてください。数値は単位なしで返してください。';
+  var INBODY_ANALYSIS_SYSTEM = 'あなたはInBodyやEVOLT 360などの体組成計の結果表(日本語・英語どちらも)を読み取るアシスタントです。画像から各項目の数値を抽出してください。英語ラベルの場合も対応する項目にマッピングしてください。読み取れない項目はnullにしてください。数値は単位や範囲・評価(High/Optimalなど)を除いた数値のみを返してください。';
   var nn = { anyOf: [{ type: 'number' }, { type: 'null' }] };
   var INBODY_SCHEMA = {
     type: 'object',
     properties: {
-      weight: Object.assign({ description: '体重(kg)。' }, nn),
-      bodyFat: Object.assign({ description: '体脂肪率(%)。' }, nn),
-      muscle: Object.assign({ description: '骨格筋量(kg)。' }, nn),
-      bmi: Object.assign({ description: 'BMI。' }, nn),
-      score: Object.assign({ description: 'InBody得点/スコア。無ければnull。' }, nn)
+      weight: Object.assign({ description: '体重 / Weight (kg)。' }, nn),
+      bodyFat: Object.assign({ description: '体脂肪率 / Total Body Fat Percentage (%)。' }, nn),
+      muscle: Object.assign({ description: '骨格筋量 / Skeletal Muscle Mass (kg)。' }, nn),
+      leanMass: Object.assign({ description: '除脂肪体重 / Lean Body Mass (kg)。' }, nn),
+      fatMass: Object.assign({ description: '体脂肪量 / Body Fat Mass (kg)。' }, nn),
+      bodyWater: Object.assign({ description: '体水分 / Total Body Water (kg)。' }, nn),
+      protein: Object.assign({ description: 'タンパク質 / Protein (kg)。' }, nn),
+      mineral: Object.assign({ description: 'ミネラル / Mineral (kg)。' }, nn),
+      visceralFatLevel: Object.assign({ description: '内臓脂肪レベル / Visceral Fat Level (整数)。' }, nn),
+      bmr: Object.assign({ description: '基礎代謝 / BMR Basal Metabolic Rate (kcal)。' }, nn),
+      bmi: Object.assign({ description: 'BMI。表に無ければnull。' }, nn),
+      score: Object.assign({ description: 'InBody得点、またはEVOLTのBWIスコア(10点満点、例8.0)。無ければnull。' }, nn)
     },
-    required: ['weight', 'bodyFat', 'muscle', 'bmi', 'score'],
+    required: ['weight', 'bodyFat', 'muscle', 'leanMass', 'fatMass', 'bodyWater', 'protein', 'mineral', 'visceralFatLevel', 'bmr', 'bmi', 'score'],
     additionalProperties: false
   };
 
@@ -2741,6 +2759,13 @@
       if (r.weight != null) chips.push('<span class="inbody-chip">体重 <b>' + r.weight + '</b>kg</span>');
       if (r.bodyFat != null) chips.push('<span class="inbody-chip">体脂肪 <b>' + r.bodyFat + '</b>%</span>');
       if (r.muscle != null) chips.push('<span class="inbody-chip">骨格筋 <b>' + r.muscle + '</b>kg</span>');
+      if (r.leanMass != null) chips.push('<span class="inbody-chip">除脂肪 <b>' + r.leanMass + '</b>kg</span>');
+      if (r.fatMass != null) chips.push('<span class="inbody-chip">体脂肪量 <b>' + r.fatMass + '</b>kg</span>');
+      if (r.bodyWater != null) chips.push('<span class="inbody-chip">体水分 <b>' + r.bodyWater + '</b>kg</span>');
+      if (r.protein != null) chips.push('<span class="inbody-chip">タンパク質 <b>' + r.protein + '</b>kg</span>');
+      if (r.mineral != null) chips.push('<span class="inbody-chip">ミネラル <b>' + r.mineral + '</b>kg</span>');
+      if (r.visceralFatLevel != null) chips.push('<span class="inbody-chip">内臓脂肪Lv <b>' + r.visceralFatLevel + '</b></span>');
+      if (r.bmr != null) chips.push('<span class="inbody-chip">基礎代謝 <b>' + r.bmr + '</b>kcal</span>');
       if (r.bmi != null) chips.push('<span class="inbody-chip">BMI <b>' + r.bmi + '</b></span>');
       if (r.score != null) chips.push('<span class="inbody-chip">スコア <b>' + r.score + '</b></span>');
       var thumb = r.photo
@@ -2762,7 +2787,7 @@
     currentInbodyPhotoBase64 = null;
     $('inbodyPreviewWrap').style.display = 'none';
     $('inbodyPreview').src = '';
-    ['inbodyWeight', 'inbodyFat', 'inbodyMuscle', 'inbodyBmi', 'inbodyScore', 'inbodyMemo'].forEach(function (id) { $(id).value = ''; });
+    ['inbodyWeight', 'inbodyFat', 'inbodyMuscle', 'inbodyLeanMass', 'inbodyFatMass', 'inbodyBodyWater', 'inbodyProtein', 'inbodyMineral', 'inbodyVisceral', 'inbodyBmr', 'inbodyBmi', 'inbodyScore', 'inbodyMemo'].forEach(function (id) { $(id).value = ''; });
     var hint = $('inbodyAnalyzeHint');
     hint.style.display = 'none';
     hint.classList.remove('detected');
@@ -2789,6 +2814,13 @@
       weight: num('inbodyWeight'),
       bodyFat: num('inbodyFat'),
       muscle: num('inbodyMuscle'),
+      leanMass: num('inbodyLeanMass'),
+      fatMass: num('inbodyFatMass'),
+      bodyWater: num('inbodyBodyWater'),
+      protein: num('inbodyProtein'),
+      mineral: num('inbodyMineral'),
+      visceralFatLevel: num('inbodyVisceral'),
+      bmr: num('inbodyBmr'),
       bmi: num('inbodyBmi'),
       score: num('inbodyScore'),
       memo: $('inbodyMemo').value.trim(),
@@ -2853,15 +2885,23 @@
           { type: 'text', text: 'この体組成計の結果表から数値を抽出してください。' }
         ]
       }],
-      maxTokens: 400,
+      maxTokens: 600,
       outputFormat: { type: 'json_schema', schema: INBODY_SCHEMA }
     }).then(function (text) {
       var data = JSON.parse(text);
-      if (data.weight != null) $('inbodyWeight').value = data.weight;
-      if (data.bodyFat != null) $('inbodyFat').value = data.bodyFat;
-      if (data.muscle != null) $('inbodyMuscle').value = data.muscle;
-      if (data.bmi != null) $('inbodyBmi').value = data.bmi;
-      if (data.score != null) $('inbodyScore').value = data.score;
+      var setIf = function (id, v) { if (v != null) $(id).value = v; };
+      setIf('inbodyWeight', data.weight);
+      setIf('inbodyFat', data.bodyFat);
+      setIf('inbodyMuscle', data.muscle);
+      setIf('inbodyLeanMass', data.leanMass);
+      setIf('inbodyFatMass', data.fatMass);
+      setIf('inbodyBodyWater', data.bodyWater);
+      setIf('inbodyProtein', data.protein);
+      setIf('inbodyMineral', data.mineral);
+      setIf('inbodyVisceral', data.visceralFatLevel);
+      setIf('inbodyBmr', data.bmr);
+      setIf('inbodyBmi', data.bmi);
+      setIf('inbodyScore', data.score);
       hint.textContent = '🤖 解析結果を反映しました(内容を確認・修正してください)';
       hint.classList.add('detected');
       btn.disabled = false;
