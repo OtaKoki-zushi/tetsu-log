@@ -330,6 +330,17 @@
   #groupEditOverlay { z-index: 53; }
   .ge-set-row { display: grid; grid-template-columns: auto 1fr 1fr; align-items: end; gap: 10px; margin-bottom: 10px; }
   .ge-set-idx { font-size: 12px; color: var(--text-muted); font-weight: 700; padding-bottom: 12px; }
+  .inbody-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+  .inbody-row { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+  .inbody-thumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); flex-shrink: 0; cursor: pointer; }
+  .inbody-thumb.placeholder { display: flex; align-items: center; justify-content: center; color: var(--text-faint); font-size: 22px; }
+  .inbody-info { flex: 1; min-width: 0; }
+  .inbody-date { font-size: 13px; font-weight: 800; }
+  .inbody-metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .inbody-chip { font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; }
+  .inbody-chip b { color: var(--text); font-weight: 800; }
+  .inbody-memo { font-size: 11.5px; color: var(--text-faint); margin-top: 6px; }
+  .inbody-del { border: none; background: none; color: var(--text-faint); font-size: 13px; padding: 6px; cursor: pointer; align-self: flex-start; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
@@ -490,33 +501,10 @@
   <section class="screen" id="screen-progress">
     <div class="screen-header">
       <h2 class="screen-title">進捗</h2>
-      <p class="screen-desc">今月の目標や記録日数、合計負荷量を振り返れます。</p>
+      <p class="screen-desc">合計負荷量を振り返れます。</p>
     </div>
 
     <div class="summary-card" id="workoutSummaryCard" style="display:none"></div>
-
-    <div class="card" id="monthlyGoalCard">
-      <span class="card-label">今月の目標</span>
-      <div class="field">
-        <input type="text" id="monthlyGoalInput" placeholder="例）週3回トレーニングする" autocomplete="off">
-      </div>
-    </div>
-
-    <div class="card">
-      <span class="card-label">トレーニング日数</span>
-      <div id="trainingCalendar"></div>
-    </div>
-
-    <div class="cal-stats-row">
-      <div class="card cal-stat-card">
-        <span class="card-label">今月</span>
-        <div class="log-weight" id="calMonthCount">0<span>回</span></div>
-      </div>
-      <div class="card cal-stat-card">
-        <span class="card-label">トータル</span>
-        <div class="log-weight" id="calTotalCount">0<span>回</span></div>
-      </div>
-    </div>
 
     <div class="card" id="loadCompareCard">
       <span class="card-label">合計負荷量</span>
@@ -610,6 +598,54 @@
     </form>
   </section>
 
+  <!-- ===== InBody ===== -->
+  <section class="screen" id="screen-inbody">
+    <div class="screen-header">
+      <h2 class="screen-title">InBody</h2>
+      <p class="screen-desc">結果表を撮ると主要な数値をAIが自動入力します。手直しもできます。</p>
+    </div>
+
+    <form class="card" id="addInbodyForm">
+      <span class="card-label">InBodyを記録</span>
+      <div class="field-row" style="margin-top:10px;">
+        <div class="field">
+          <label for="inbodyDate">測定日</label>
+          <input type="date" id="inbodyDate">
+        </div>
+        <div class="field">
+          <label>結果表の写真</label>
+          <input type="file" id="inbodyPhotoInput" accept="image/*" style="display:none">
+          <button type="button" class="btn btn-outline" id="inbodyPhotoBtn">📷 写真を撮る/選ぶ</button>
+        </div>
+        <div id="inbodyPreviewWrap" style="display:none; margin-top:4px;">
+          <img id="inbodyPreview" class="inbody-preview" alt="プレビュー">
+          <button type="button" class="btn btn-outline" id="inbodyAnalyzeBtn" style="margin-top:8px;">🤖 写真から数値を自動入力</button>
+        </div>
+        <div class="detect-hint" id="inbodyAnalyzeHint" style="display:none"></div>
+        <div class="field-trio">
+          <div class="field"><label>体重 (kg)</label><input type="number" id="inbodyWeight" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>体脂肪率 (%)</label><input type="number" id="inbodyFat" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>骨格筋量 (kg)</label><input type="number" id="inbodyMuscle" step="0.1" min="0" inputmode="decimal"></div>
+        </div>
+        <div class="field-trio two-col">
+          <div class="field"><label>BMI</label><input type="number" id="inbodyBmi" step="0.1" min="0" inputmode="decimal"></div>
+          <div class="field"><label>スコア (任意)</label><input type="number" id="inbodyScore" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label>メモ (任意)</label><input type="text" id="inbodyMemo" placeholder="例）減量2週目 / 体調メモなど" autocomplete="off"></div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="btn btn-primary" type="submit" id="addInbodyBtn">＋ 記録する</button>
+    </form>
+
+    <div>
+      <div class="section-heading">
+        <h3>これまでの記録</h3>
+        <span id="inbodyCount"></span>
+      </div>
+      <div id="inbodyList"></div>
+    </div>
+  </section>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-target="record" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
@@ -622,6 +658,10 @@
     <button class="nav-item" data-target="progress" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
       <span>進捗</span>
+    </button>
+    <button class="nav-item" data-target="inbody" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><circle cx="12" cy="8" r="2.2"></circle><path d="M8 14h8"></path><path d="M8 17h5"></path></svg>
+      <span>InBody</span>
     </button>
     <button class="nav-item" data-target="feedback" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z"></path><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path><path d="M9 22h6"></path></svg>
@@ -752,6 +792,18 @@
     </div>
   </div>
 
+  <!-- ===== InBody写真の拡大表示 ===== -->
+  <div class="settings-overlay" id="inbodyPhotoOverlay">
+    <div class="settings-header">
+      <button class="icon-btn" id="closeInbodyPhotoBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
+      <h2 id="inbodyPhotoTitle">InBody</h2>
+      <div style="width:36px"></div>
+    </div>
+    <div class="settings-body" style="align-items:center;">
+      <img id="inbodyPhotoFull" alt="InBody結果" style="max-width:100%; border-radius:12px;">
+    </div>
+  </div>
+
   <!-- ===== RM計算機 ===== -->
   <div class="settings-overlay" id="rmCalcOverlay">
     <div class="settings-header">
@@ -820,7 +872,8 @@
     settings: 'tetsulog_settings',
     feedback: 'tetsulog_last_feedback',
     myPage: 'tetsulog_mypage',
-    dailyNotes: 'tetsulog_daily_notes'
+    dailyNotes: 'tetsulog_daily_notes',
+    inbody: 'tetsulog_inbody'
   };
 
   function loadJSON(key, fallback) {
@@ -896,6 +949,8 @@
     feedbackSelectedDate: todayStr(),
     myPage: loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE))),
     dailyNotes: loadJSON(LS.dailyNotes, {}),
+    inbody: loadJSON(LS.inbody, []),
+    inbodySelectedDate: todayStr(),
     selectedDate: todayStr()
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
@@ -1492,6 +1547,7 @@
   }
 
   function bindCalendarClicks(containerEl) {
+    if (!containerEl) return;
     containerEl.addEventListener('click', function (ev) {
       var cell = ev.target.closest('.cal-cell[data-date]');
       if (!cell) return;
@@ -1894,8 +1950,8 @@
       var d = new Date(e.date + 'T00:00:00');
       if (d.getFullYear() === curYear && d.getMonth() === curMonth) monthDates[e.date] = true;
     });
-    $('calMonthCount').innerHTML = Object.keys(monthDates).length + '<span>回</span>';
-    $('calTotalCount').innerHTML = Object.keys(allDates).length + '<span>回</span>';
+    if ($('calMonthCount')) $('calMonthCount').innerHTML = Object.keys(monthDates).length + '<span>回</span>';
+    if ($('calTotalCount')) $('calTotalCount').innerHTML = Object.keys(allDates).length + '<span>回</span>';
   }
 
   // Comparison objects for visualizing total lifted weight, ascending by kg.
@@ -2526,7 +2582,7 @@
     });
   });
 
-  $('monthlyGoalInput').addEventListener('change', function () {
+  if ($('monthlyGoalInput')) $('monthlyGoalInput').addEventListener('change', function () {
     state.myPage = state.myPage || JSON.parse(JSON.stringify(DEFAULT_MYPAGE));
     state.myPage.monthlyGoal = this.value.trim();
     saveJSON(LS.myPage, state.myPage);
@@ -2600,6 +2656,184 @@
       img.src = url;
     });
   }
+
+  // ---------------------------------------------------------------------
+  // InBody records — photo of the body-composition sheet + key numbers.
+  // AI (Claude vision) extracts the main figures; everything is editable.
+  // ---------------------------------------------------------------------
+  var INBODY_ANALYSIS_SYSTEM = 'あなたはInBodyなどの体組成計の結果表を読み取るアシスタントです。画像から主要な数値を抽出してください。読み取れない項目はnullにしてください。数値は単位なしで返してください。';
+  var nn = { anyOf: [{ type: 'number' }, { type: 'null' }] };
+  var INBODY_SCHEMA = {
+    type: 'object',
+    properties: {
+      weight: Object.assign({ description: '体重(kg)。' }, nn),
+      bodyFat: Object.assign({ description: '体脂肪率(%)。' }, nn),
+      muscle: Object.assign({ description: '骨格筋量(kg)。' }, nn),
+      bmi: Object.assign({ description: 'BMI。' }, nn),
+      score: Object.assign({ description: 'InBody得点/スコア。無ければnull。' }, nn)
+    },
+    required: ['weight', 'bodyFat', 'muscle', 'bmi', 'score'],
+    additionalProperties: false
+  };
+
+  var currentInbodyPhoto = null;       // data URL for display/storage
+  var currentInbodyPhotoBase64 = null; // raw base64 for AI analysis
+
+  function renderInbodyList() {
+    var list = $('inbodyList');
+    if (!list) return;
+    var count = $('inbodyCount');
+    var records = state.inbody.slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.ts || 0) - (a.ts || 0);
+    });
+    if (count) count.textContent = records.length + '件';
+    if (!records.length) {
+      list.innerHTML = '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
+      return;
+    }
+    list.innerHTML = records.map(function (r) {
+      var chips = [];
+      if (r.weight != null) chips.push('<span class="inbody-chip">体重 <b>' + r.weight + '</b>kg</span>');
+      if (r.bodyFat != null) chips.push('<span class="inbody-chip">体脂肪 <b>' + r.bodyFat + '</b>%</span>');
+      if (r.muscle != null) chips.push('<span class="inbody-chip">骨格筋 <b>' + r.muscle + '</b>kg</span>');
+      if (r.bmi != null) chips.push('<span class="inbody-chip">BMI <b>' + r.bmi + '</b></span>');
+      if (r.score != null) chips.push('<span class="inbody-chip">スコア <b>' + r.score + '</b></span>');
+      var thumb = r.photo
+        ? '<img class="inbody-thumb" src="' + r.photo + '" data-photo-id="' + escapeHtml(r.id) + '" alt="">'
+        : '<div class="inbody-thumb placeholder">📄</div>';
+      return '<div class="inbody-row">' + thumb +
+        '<div class="inbody-info">' +
+          '<div class="inbody-date">' + formatDateLabel(r.date) + '</div>' +
+          (chips.length ? '<div class="inbody-metrics">' + chips.join('') + '</div>' : '') +
+          (r.memo ? '<div class="inbody-memo">' + escapeHtml(r.memo) + '</div>' : '') +
+        '</div>' +
+        '<button type="button" class="inbody-del" data-del-id="' + escapeHtml(r.id) + '">削除</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function clearInbodyForm() {
+    currentInbodyPhoto = null;
+    currentInbodyPhotoBase64 = null;
+    $('inbodyPreviewWrap').style.display = 'none';
+    $('inbodyPreview').src = '';
+    ['inbodyWeight', 'inbodyFat', 'inbodyMuscle', 'inbodyBmi', 'inbodyScore', 'inbodyMemo'].forEach(function (id) { $(id).value = ''; });
+    var hint = $('inbodyAnalyzeHint');
+    hint.style.display = 'none';
+    hint.classList.remove('detected');
+  }
+
+  function deleteInbody(id) {
+    if (!window.confirm('この記録を削除しますか？')) return;
+    if (cloudHooks && cloudHooks.deleteInbody) {
+      cloudHooks.deleteInbody(id);
+    } else {
+      state.inbody = state.inbody.filter(function (r) { return r.id !== id; });
+      saveJSON(LS.inbody, state.inbody);
+      renderInbodyList();
+    }
+  }
+
+  function handleAddInbody(ev) {
+    if (ev) ev.preventDefault();
+    var num = function (id) { var v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+    var rec = {
+      id: 'ib' + Date.now() + Math.random().toString(36).slice(2, 7),
+      date: state.inbodySelectedDate,
+      photo: currentInbodyPhoto || null,
+      weight: num('inbodyWeight'),
+      bodyFat: num('inbodyFat'),
+      muscle: num('inbodyMuscle'),
+      bmi: num('inbodyBmi'),
+      score: num('inbodyScore'),
+      memo: $('inbodyMemo').value.trim(),
+      ts: Date.now()
+    };
+    if (!rec.photo && rec.weight == null && rec.bodyFat == null && rec.muscle == null) {
+      alert('写真を撮るか、数値を入力してください');
+      return;
+    }
+    if (cloudHooks && cloudHooks.writeInbody) {
+      cloudHooks.writeInbody(rec);
+    } else {
+      state.inbody.push(rec);
+      saveJSON(LS.inbody, state.inbody);
+    }
+    clearInbodyForm();
+    renderInbodyList();
+    showToast('InBodyを記録しました');
+  }
+
+  function openInbodyPhoto(id) {
+    var rec = state.inbody.filter(function (r) { return r.id === id; })[0];
+    if (!rec || !rec.photo) return;
+    $('inbodyPhotoTitle').textContent = formatDateLabel(rec.date);
+    $('inbodyPhotoFull').src = rec.photo;
+    $('inbodyPhotoOverlay').classList.add('open');
+  }
+
+  $('addInbodyForm').addEventListener('submit', handleAddInbody);
+  $('inbodyDate').addEventListener('change', function () {
+    state.inbodySelectedDate = $('inbodyDate').value || todayStr();
+  });
+  $('inbodyPhotoBtn').addEventListener('click', function () { $('inbodyPhotoInput').click(); });
+  $('inbodyPhotoInput').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    resizeImageFile(file, 1100).then(function (base64) {
+      currentInbodyPhotoBase64 = base64;
+      currentInbodyPhoto = 'data:image/jpeg;base64,' + base64;
+      $('inbodyPreview').src = currentInbodyPhoto;
+      $('inbodyPreviewWrap').style.display = 'block';
+    }).catch(function () { showToast('画像の読み込みに失敗しました'); });
+  });
+  $('inbodyAnalyzeBtn').addEventListener('click', function () {
+    if (!currentInbodyPhotoBase64) { showToast('先に写真を撮ってください'); return; }
+    if (!state.settings.apiKey) { showToast('先に設定画面でAPIキーを登録してください'); openSettings(); return; }
+    var hint = $('inbodyAnalyzeHint');
+    var btn = this;
+    hint.style.display = 'block';
+    hint.classList.remove('detected');
+    hint.textContent = '🤖 写真を解析中…';
+    btn.disabled = true;
+    callClaude({
+      apiKey: state.settings.apiKey,
+      model: state.settings.model,
+      system: INBODY_ANALYSIS_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: currentInbodyPhotoBase64 } },
+          { type: 'text', text: 'この体組成計の結果表から数値を抽出してください。' }
+        ]
+      }],
+      maxTokens: 400,
+      outputFormat: { type: 'json_schema', schema: INBODY_SCHEMA }
+    }).then(function (text) {
+      var data = JSON.parse(text);
+      if (data.weight != null) $('inbodyWeight').value = data.weight;
+      if (data.bodyFat != null) $('inbodyFat').value = data.bodyFat;
+      if (data.muscle != null) $('inbodyMuscle').value = data.muscle;
+      if (data.bmi != null) $('inbodyBmi').value = data.bmi;
+      if (data.score != null) $('inbodyScore').value = data.score;
+      hint.textContent = '🤖 解析結果を反映しました(内容を確認・修正してください)';
+      hint.classList.add('detected');
+      btn.disabled = false;
+    }).catch(function (e) {
+      hint.textContent = '解析に失敗しました: ' + e.message;
+      hint.classList.remove('detected');
+      btn.disabled = false;
+    });
+  });
+  $('inbodyList').addEventListener('click', function (ev) {
+    var thumb = ev.target.closest('.inbody-thumb[data-photo-id]');
+    if (thumb) { openInbodyPhoto(thumb.dataset.photoId); return; }
+    var del = ev.target.closest('.inbody-del[data-del-id]');
+    if (del) { deleteInbody(del.dataset.delId); }
+  });
+  $('closeInbodyPhotoBtn').addEventListener('click', function () { $('inbodyPhotoOverlay').classList.remove('open'); });
 
   // ---------------------------------------------------------------------
   // settings
@@ -2983,12 +3217,15 @@
     var today = todayStr();
     state.selectedDate = today;
     state.feedbackSelectedDate = today;
+    state.inbodySelectedDate = today;
     var entryDateEl = $('entryDate');
     entryDateEl.max = today;
     entryDateEl.value = today;
     var feedbackDateEl = $('feedbackDateInput');
     feedbackDateEl.max = today;
     feedbackDateEl.value = today;
+    var inbodyDateEl = $('inbodyDate');
+    if (inbodyDateEl) { inbodyDateEl.max = today; inbodyDateEl.value = today; }
   }
 
   function reloadFromLocal() {
@@ -2999,6 +3236,7 @@
     state.feedbackHistory = loadFeedbackHistory();
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.dailyNotes = loadJSON(LS.dailyNotes, {});
+    state.inbody = loadJSON(LS.inbody, []);
     state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
     state.activeCategory = null;
     state.manualOverride = false;
@@ -3011,6 +3249,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
+    renderInbodyList();
   }
 
   function init() {
@@ -3023,6 +3262,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
+    renderInbodyList();
   }
   init();
 
@@ -3060,6 +3300,10 @@
       }
       renderFeedback();
       renderMyPage();
+    },
+    applyCloudInbody: function (list) {
+      state.inbody = list;
+      renderInbodyList();
     },
     reloadFromLocal: reloadFromLocal
   };
@@ -3123,8 +3367,10 @@
   var cloudUser = null;
   var unsubEntries = null;
   var unsubProfile = null;
+  var unsubInbody = null;
 
   function entriesCol() { return collection(db, 'users', cloudUser.uid, 'entries'); }
+  function inbodyCol() { return collection(db, 'users', cloudUser.uid, 'inbody'); }
   function profileRef() { return doc(db, 'users', cloudUser.uid); }
 
   function updateAuthUI() {
@@ -3193,6 +3439,22 @@
     });
   }
 
+  function writeInbody(rec) {
+    if (!cloudUser) return;
+    setDoc(doc(inbodyCol(), rec.id), rec).catch(function (e) {
+      console.warn('[鉄ログ] inbody sync failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('同期に失敗しました: ' + e.message);
+    });
+  }
+
+  function deleteInbodyCloud(id) {
+    if (!cloudUser) return;
+    deleteDoc(doc(inbodyCol(), id)).catch(function (e) {
+      console.warn('[鉄ログ] inbody delete failed', e);
+      if (window.TetsuLogApp) window.TetsuLogApp.showToast('削除に失敗しました: ' + e.message);
+    });
+  }
+
   async function subscribeCloud() {
     var ref = profileRef();
     var snap;
@@ -3220,6 +3482,10 @@
         for (var i = 0; i < localEntries.length; i++) {
           await setDoc(doc(entriesCol(), localEntries[i].id), localEntries[i]);
         }
+        var localInbody = (local.inbody || []).slice();
+        for (var k = 0; k < localInbody.length; k++) {
+          await setDoc(doc(inbodyCol(), localInbody[k].id), localInbody[k]);
+        }
         window.TetsuLogApp.showToast('この端末の記録をクラウドに移行しました');
       } catch (e) {
         console.warn('[鉄ログ] initial migration failed', e);
@@ -3236,6 +3502,12 @@
       qs.forEach(function (d) { list.push(d.data()); });
       window.TetsuLogApp.applyCloudEntries(list);
     });
+
+    unsubInbody = onSnapshot(inbodyCol(), function (qs) {
+      var list = [];
+      qs.forEach(function (d) { list.push(d.data()); });
+      window.TetsuLogApp.applyCloudInbody(list);
+    });
   }
 
   onAuthStateChanged(auth, function (user) {
@@ -3243,11 +3515,12 @@
     updateAuthUI();
     if (!window.TetsuLogApp) return;
     if (cloudUser) {
-      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud });
+      window.TetsuLogApp.setCloudHooks({ writeEntry: writeEntry, writeProfile: writeProfile, deleteEntry: deleteEntryCloud, writeInbody: writeInbody, deleteInbody: deleteInbodyCloud });
       subscribeCloud();
     } else {
       if (unsubEntries) { unsubEntries(); unsubEntries = null; }
       if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+      if (unsubInbody) { unsubInbody(); unsubInbody = null; }
       window.TetsuLogApp.setCloudHooks(null);
       window.TetsuLogApp.reloadFromLocal();
     }
