@@ -353,6 +353,22 @@
   .inbody-chip b { color: var(--text); font-weight: 800; }
   .inbody-memo { font-size: 11.5px; color: var(--text-faint); margin-top: 6px; }
   .inbody-del { border: none; background: none; color: var(--text-faint); font-size: 13px; padding: 6px; cursor: pointer; align-self: flex-start; }
+  /* 項目別の一覧表示（ボディ計測アプリ風） */
+  .ib-datenav { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 4px 0 12px; }
+  .ib-datenav button { background: none; border: none; color: var(--accent); font-size: 18px; cursor: pointer; padding: 4px 12px; line-height: 1; border-radius: 8px; }
+  .ib-datenav button:disabled { color: var(--text-faint); opacity: 0.35; cursor: default; }
+  .ib-datenav .ib-date { font-size: 16px; font-weight: 800; letter-spacing: 0.02em; min-width: 130px; text-align: center; }
+  .ib-metric-list { display: flex; flex-direction: column; }
+  .ib-metric-row { display: flex; align-items: center; gap: 12px; padding: 14px 2px; border-bottom: 1px solid var(--border); }
+  .ib-metric-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; }
+  .ib-metric-val { font-size: 17px; font-weight: 800; white-space: nowrap; }
+  .ib-metric-val small { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-left: 2px; }
+  .ib-metric-val.empty { color: var(--text-faint); font-weight: 700; letter-spacing: 0.18em; }
+  .ib-metric-graph { border: none; background: none; color: var(--text); cursor: pointer; padding: 5px; border-radius: 8px; display: flex; align-items: center; }
+  .ib-metric-graph:disabled { color: var(--text-faint); opacity: 0.3; cursor: default; }
+  .ib-record-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .ib-record-foot .inbody-memo { flex: 1; min-width: 120px; margin: 0; }
+  .ib-empty-note { color: var(--text-faint); font-size: 12.5px; text-align: center; padding: 10px 0; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
@@ -649,7 +665,7 @@
 
     <div>
       <div class="section-heading">
-        <h3>これまでの記録</h3>
+        <h3>測定データ・推移</h3>
         <span id="inbodyCount"></span>
       </div>
       <div id="inbodyList"></div>
@@ -2741,104 +2757,238 @@
   var currentInbodyPhoto = null;       // data URL for display/storage
   var currentInbodyPhotoBase64 = null; // raw base64 for AI analysis
 
+  // Body-composition metrics shown as a per-date list, each graphable.
+  var INBODY_METRICS = [
+    { key: 'weight', label: '体重', unit: 'kg', input: 'inbodyWeight' },
+    { key: 'bodyFat', label: '体脂肪率', unit: '%', input: 'inbodyFat' },
+    { key: 'muscle', label: '骨格筋量', unit: 'kg', input: 'inbodyMuscle' },
+    { key: 'leanMass', label: '除脂肪量', unit: 'kg', input: 'inbodyLeanMass' },
+    { key: 'fatMass', label: '体脂肪量', unit: 'kg', input: 'inbodyFatMass' },
+    { key: 'bodyWater', label: '体水分', unit: 'kg', input: 'inbodyBodyWater' },
+    { key: 'protein', label: 'タンパク質', unit: 'kg', input: 'inbodyProtein' },
+    { key: 'mineral', label: 'ミネラル', unit: 'kg', input: 'inbodyMineral' },
+    { key: 'visceralFatLevel', label: '内臓脂肪レベル', unit: '', input: 'inbodyVisceral' },
+    { key: 'bmr', label: '基礎代謝', unit: 'kcal', input: 'inbodyBmr' },
+    { key: 'bmi', label: 'BMI', unit: '', input: 'inbodyBmi' },
+    { key: 'score', label: 'スコア', unit: '', input: 'inbodyScore' }
+  ];
+
+  var IB_GRAPH_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><polyline points="6 14 10 10 13 13 18 7"></polyline></svg>';
+
+  // Dates that have an InBody record, newest first.
+  function inbodyDatesDesc() {
+    return Array.from(new Set(state.inbody.map(function (r) { return r.date; })))
+      .sort(function (a, b) { return a < b ? 1 : -1; });
+  }
+  // The record for the currently selected date (or null).
+  function inbodyRecordForDate(date) {
+    var recs = state.inbody.filter(function (r) { return r.date === date; });
+    if (!recs.length) return null;
+    recs.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    return recs[0];
+  }
+  // How many distinct dates have a value for this metric (>=2 needed to graph).
+  function inbodyMetricPointCount(key) {
+    var seen = {};
+    state.inbody.forEach(function (r) { if (r[key] != null) seen[r.date] = true; });
+    return Object.keys(seen).length;
+  }
+
   function renderInbodyList() {
     var list = $('inbodyList');
     if (!list) return;
     var count = $('inbodyCount');
-    var records = state.inbody.slice().sort(function (a, b) {
-      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-      return (b.ts || 0) - (a.ts || 0);
-    });
-    if (count) count.textContent = records.length + '件';
-    if (!records.length) {
-      list.innerHTML = '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
-      return;
-    }
-    list.innerHTML = records.map(function (r) {
-      var chips = [];
-      if (r.weight != null) chips.push('<span class="inbody-chip">体重 <b>' + r.weight + '</b>kg</span>');
-      if (r.bodyFat != null) chips.push('<span class="inbody-chip">体脂肪 <b>' + r.bodyFat + '</b>%</span>');
-      if (r.muscle != null) chips.push('<span class="inbody-chip">骨格筋 <b>' + r.muscle + '</b>kg</span>');
-      if (r.leanMass != null) chips.push('<span class="inbody-chip">除脂肪 <b>' + r.leanMass + '</b>kg</span>');
-      if (r.fatMass != null) chips.push('<span class="inbody-chip">体脂肪量 <b>' + r.fatMass + '</b>kg</span>');
-      if (r.bodyWater != null) chips.push('<span class="inbody-chip">体水分 <b>' + r.bodyWater + '</b>kg</span>');
-      if (r.protein != null) chips.push('<span class="inbody-chip">タンパク質 <b>' + r.protein + '</b>kg</span>');
-      if (r.mineral != null) chips.push('<span class="inbody-chip">ミネラル <b>' + r.mineral + '</b>kg</span>');
-      if (r.visceralFatLevel != null) chips.push('<span class="inbody-chip">内臓脂肪Lv <b>' + r.visceralFatLevel + '</b></span>');
-      if (r.bmr != null) chips.push('<span class="inbody-chip">基礎代謝 <b>' + r.bmr + '</b>kcal</span>');
-      if (r.bmi != null) chips.push('<span class="inbody-chip">BMI <b>' + r.bmi + '</b></span>');
-      if (r.score != null) chips.push('<span class="inbody-chip">スコア <b>' + r.score + '</b></span>');
-      var thumb = r.photo
-        ? '<img class="inbody-thumb" src="' + r.photo + '" data-photo-id="' + escapeHtml(r.id) + '" alt="">'
-        : '<div class="inbody-thumb placeholder">📄</div>';
-      return '<div class="inbody-row">' + thumb +
-        '<div class="inbody-info">' +
-          '<div class="inbody-date">' + formatDateLabel(r.date) + '</div>' +
-          (chips.length ? '<div class="inbody-metrics">' + chips.join('') + '</div>' : '') +
-          (r.memo ? '<div class="inbody-memo">' + escapeHtml(r.memo) + '</div>' : '') +
-        '</div>' +
-        '<button type="button" class="inbody-del" data-del-id="' + escapeHtml(r.id) + '">削除</button>' +
+    var dates = inbodyDatesDesc();
+    if (count) count.textContent = dates.length + '件';
+
+    var selDate = state.inbodySelectedDate;
+    var rec = inbodyRecordForDate(selDate);
+
+    // date navigator across recorded dates (disabled ends). The selected date
+    // may be a not-yet-saved date, so locate the nearest neighbours by value.
+    var olderDates = dates.filter(function (d) { return d < selDate; });
+    var newerDates = dates.filter(function (d) { return d > selDate; });
+    var prevDate = olderDates.length ? olderDates[0] : null;   // nearest older
+    var nextDate = newerDates.length ? newerDates[newerDates.length - 1] : null; // nearest newer
+    var nav =
+      '<div class="ib-datenav">' +
+        '<button type="button" class="ib-nav" data-go="' + (prevDate || '') + '"' + (prevDate ? '' : ' disabled') + ' aria-label="前の記録">&#9664;</button>' +
+        '<span class="ib-date">' + selDate.replace(/-/g, '/') + '</span>' +
+        '<button type="button" class="ib-nav" data-go="' + (nextDate || '') + '"' + (nextDate ? '' : ' disabled') + ' aria-label="次の記録">&#9654;</button>' +
+      '</div>';
+
+    var rows = INBODY_METRICS.map(function (m) {
+      var v = rec ? rec[m.key] : null;
+      var valHtml = (v != null)
+        ? '<span class="ib-metric-val">' + v + (m.unit ? ' <small>' + m.unit + '</small>' : '') + '</span>'
+        : '<span class="ib-metric-val empty">---</span>';
+      var canGraph = inbodyMetricPointCount(m.key) >= 2;
+      var graphBtn = '<button type="button" class="ib-metric-graph" data-graph="' + m.key + '"' + (canGraph ? '' : ' disabled') + ' aria-label="' + escapeHtml(m.label) + 'の推移">' + IB_GRAPH_ICON + '</button>';
+      return '<div class="ib-metric-row">' +
+        '<span class="ib-metric-name">' + escapeHtml(m.label) + '</span>' +
+        valHtml + graphBtn +
       '</div>';
     }).join('');
+
+    var foot = '';
+    if (rec) {
+      var thumb = rec.photo
+        ? '<img class="inbody-thumb" src="' + rec.photo + '" data-photo-id="' + escapeHtml(rec.id) + '" alt="">'
+        : '';
+      foot = '<div class="ib-record-foot">' + thumb +
+        (rec.memo ? '<div class="inbody-memo">' + escapeHtml(rec.memo) + '</div>' : '<div style="flex:1"></div>') +
+        '<button type="button" class="inbody-del" data-del-id="' + escapeHtml(rec.id) + '">この日を削除</button>' +
+      '</div>';
+    } else if (!dates.length) {
+      foot = '<p class="ib-empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
+    } else {
+      foot = '<p class="ib-empty-note">この日の記録はありません。上のフォームから追加できます。</p>';
+    }
+
+    list.innerHTML = nav + '<div class="ib-metric-list">' + rows + '</div>' + foot;
   }
 
-  function clearInbodyForm() {
-    currentInbodyPhoto = null;
+  // Build a line chart of one metric across all recorded dates.
+  function buildInbodyChartSvg(key) {
+    // one value per date (latest ts wins) then sort ascending by date
+    var byDate = {};
+    state.inbody.forEach(function (r) {
+      if (r[key] == null) return;
+      if (!byDate[r.date] || (r.ts || 0) >= (byDate[r.date].ts || 0)) byDate[r.date] = { v: r[key], ts: r.ts };
+    });
+    var dates = Object.keys(byDate).sort();
+    if (dates.length < 2) return null;
+    var values = dates.map(function (d) { return byDate[d].v; });
+    var max = Math.max.apply(null, values);
+    var min = Math.min.apply(null, values);
+    var range = max - min || 1;
+    var w = 320, h = 160, padX = 12, padY = 18;
+    var stepX = (w - padX * 2) / (dates.length - 1);
+    var points = values.map(function (val, i) {
+      var x = padX + i * stepX;
+      var y = h - padY - ((val - min) / range) * (h - padY * 2);
+      return [x, y];
+    });
+    var pathD = points.map(function (p, i) { return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    var areaD = pathD + ' L' + points[points.length - 1][0].toFixed(1) + ',' + (h - padY) + ' L' + points[0][0].toFixed(1) + ',' + (h - padY) + ' Z';
+    var circles = points.map(function (p, i) {
+      var isLast = i === points.length - 1;
+      return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (isLast ? 4 : 2.5) + '" fill="var(--accent)"></circle>';
+    }).join('');
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; display:block;">' +
+      '<path d="' + areaD + '" fill="var(--accent-soft)" stroke="none"></path>' +
+      '<path d="' + pathD + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>' +
+      circles +
+    '</svg>';
+  }
+
+  function openInbodyChart(key) {
+    var m = INBODY_METRICS.filter(function (x) { return x.key === key; })[0];
+    if (!m) return;
+    var byDate = {};
+    state.inbody.forEach(function (r) {
+      if (r[key] == null) return;
+      if (!byDate[r.date] || (r.ts || 0) >= (byDate[r.date].ts || 0)) byDate[r.date] = { v: r[key], ts: r.ts };
+    });
+    var dates = Object.keys(byDate).sort();
+    var values = dates.map(function (d) { return byDate[d].v; });
+    var latest = values.length ? values[values.length - 1] : null;
+    var maxV = values.length ? Math.max.apply(null, values) : null;
+    var minV = values.length ? Math.min.apply(null, values) : null;
+    var unit = m.unit ? '<span style="font-size:12px;">' + m.unit + '</span>' : '';
+    var svg = buildInbodyChartSvg(key);
+    $('chartTitle').textContent = m.label + 'の推移';
+    $('chartBody').innerHTML =
+      '<div class="chart-summary">' +
+        '<div><div class="num">' + (latest != null ? latest : '—') + unit + '</div><div class="lbl">最新</div></div>' +
+        '<div><div class="num">' + (maxV != null ? maxV : '—') + '</div><div class="lbl">最大</div></div>' +
+        '<div><div class="num">' + (minV != null ? minV : '—') + '</div><div class="lbl">最小</div></div>' +
+      '</div>' +
+      (svg
+        ? '<div class="card">' + svg + '</div><p class="chart-caption">記録日ごとの' + escapeHtml(m.label) + 'の推移' + (m.unit ? '(' + m.unit + ')' : '') + '</p>'
+        : '<p class="empty-note">グラフを表示するには2日以上のデータが必要です。</p>');
+    $('chartOverlay').classList.add('open');
+  }
+
+  // Populate the input form from the record for a date (or clear if none).
+  function loadInbodyForm(date) {
+    state.inbodySelectedDate = date;
+    var dateEl = $('inbodyDate');
+    if (dateEl) dateEl.value = date;
+    var rec = inbodyRecordForDate(date);
+    INBODY_METRICS.forEach(function (m) {
+      var el = $(m.input);
+      if (el) el.value = (rec && rec[m.key] != null) ? rec[m.key] : '';
+    });
+    $('inbodyMemo').value = (rec && rec.memo) ? rec.memo : '';
     currentInbodyPhotoBase64 = null;
-    $('inbodyPreviewWrap').style.display = 'none';
-    $('inbodyPreview').src = '';
-    ['inbodyWeight', 'inbodyFat', 'inbodyMuscle', 'inbodyLeanMass', 'inbodyFatMass', 'inbodyBodyWater', 'inbodyProtein', 'inbodyMineral', 'inbodyVisceral', 'inbodyBmr', 'inbodyBmi', 'inbodyScore', 'inbodyMemo'].forEach(function (id) { $(id).value = ''; });
+    if (rec && rec.photo) {
+      currentInbodyPhoto = rec.photo;
+      $('inbodyPreview').src = rec.photo;
+      $('inbodyPreviewWrap').style.display = 'block';
+    } else {
+      currentInbodyPhoto = null;
+      $('inbodyPreview').src = '';
+      $('inbodyPreviewWrap').style.display = 'none';
+    }
     var hint = $('inbodyAnalyzeHint');
-    hint.style.display = 'none';
-    hint.classList.remove('detected');
+    if (hint) { hint.style.display = 'none'; hint.classList.remove('detected'); }
+    renderInbodyList();
+  }
+
+  // On load, open the InBody view on the most recent recorded date.
+  function initInbodyView() {
+    if (!$('inbodyList')) { renderInbodyList(); return; }
+    var dates = inbodyDatesDesc();
+    loadInbodyForm(dates.length ? dates[0] : (state.inbodySelectedDate || todayStr()));
   }
 
   function deleteInbody(id) {
     if (!window.confirm('この記録を削除しますか？')) return;
     if (cloudHooks && cloudHooks.deleteInbody) {
       cloudHooks.deleteInbody(id);
-    } else {
-      state.inbody = state.inbody.filter(function (r) { return r.id !== id; });
-      saveJSON(LS.inbody, state.inbody);
-      renderInbodyList();
     }
+    state.inbody = state.inbody.filter(function (r) { return r.id !== id; });
+    if (!cloudHooks || !cloudHooks.deleteInbody) saveJSON(LS.inbody, state.inbody);
+    // move the view to the most recent remaining record (or keep today).
+    var dates = inbodyDatesDesc();
+    loadInbodyForm(dates.length ? dates[0] : todayStr());
   }
 
   function handleAddInbody(ev) {
     if (ev) ev.preventDefault();
     var num = function (id) { var v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+    var date = state.inbodySelectedDate;
+    // one record per date — reuse the existing id so this updates in place.
+    var existing = inbodyRecordForDate(date);
     var rec = {
-      id: 'ib' + Date.now() + Math.random().toString(36).slice(2, 7),
-      date: state.inbodySelectedDate,
+      id: existing ? existing.id : 'ib' + Date.now() + Math.random().toString(36).slice(2, 7),
+      date: date,
       photo: currentInbodyPhoto || null,
-      weight: num('inbodyWeight'),
-      bodyFat: num('inbodyFat'),
-      muscle: num('inbodyMuscle'),
-      leanMass: num('inbodyLeanMass'),
-      fatMass: num('inbodyFatMass'),
-      bodyWater: num('inbodyBodyWater'),
-      protein: num('inbodyProtein'),
-      mineral: num('inbodyMineral'),
-      visceralFatLevel: num('inbodyVisceral'),
-      bmr: num('inbodyBmr'),
-      bmi: num('inbodyBmi'),
-      score: num('inbodyScore'),
       memo: $('inbodyMemo').value.trim(),
       ts: Date.now()
     };
-    if (!rec.photo && rec.weight == null && rec.bodyFat == null && rec.muscle == null) {
+    var hasAny = false;
+    INBODY_METRICS.forEach(function (m) {
+      rec[m.key] = num(m.input);
+      if (rec[m.key] != null) hasAny = true;
+    });
+    if (!rec.photo && !hasAny && !rec.memo) {
       alert('写真を撮るか、数値を入力してください');
       return;
     }
     if (cloudHooks && cloudHooks.writeInbody) {
       cloudHooks.writeInbody(rec);
+      // reflect immediately in local state too (snapshot will reconcile)
+      state.inbody = state.inbody.filter(function (r) { return r.id !== rec.id && r.date !== date; });
+      state.inbody.push(rec);
     } else {
+      state.inbody = state.inbody.filter(function (r) { return r.date !== date; });
       state.inbody.push(rec);
       saveJSON(LS.inbody, state.inbody);
     }
-    clearInbodyForm();
-    renderInbodyList();
-    showToast('InBodyを記録しました');
+    loadInbodyForm(date);
+    showToast(existing ? 'InBodyを更新しました' : 'InBodyを記録しました');
   }
 
   function openInbodyPhoto(id) {
@@ -2851,7 +3001,7 @@
 
   $('addInbodyForm').addEventListener('submit', handleAddInbody);
   $('inbodyDate').addEventListener('change', function () {
-    state.inbodySelectedDate = $('inbodyDate').value || todayStr();
+    loadInbodyForm($('inbodyDate').value || todayStr());
   });
   $('inbodyPhotoBtn').addEventListener('click', function () { $('inbodyPhotoInput').click(); });
   $('inbodyPhotoInput').addEventListener('change', function () {
@@ -2912,6 +3062,10 @@
     });
   });
   $('inbodyList').addEventListener('click', function (ev) {
+    var nav = ev.target.closest('.ib-nav[data-go]');
+    if (nav && nav.dataset.go) { loadInbodyForm(nav.dataset.go); return; }
+    var graph = ev.target.closest('.ib-metric-graph[data-graph]');
+    if (graph) { openInbodyChart(graph.dataset.graph); return; }
     var thumb = ev.target.closest('.inbody-thumb[data-photo-id]');
     if (thumb) { openInbodyPhoto(thumb.dataset.photoId); return; }
     var del = ev.target.closest('.inbody-del[data-del-id]');
@@ -3353,7 +3507,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
-    renderInbodyList();
+    initInbodyView();
   }
 
   function init() {
@@ -3366,7 +3520,7 @@
     renderHistory();
     renderFeedback();
     renderMyPage();
-    renderInbodyList();
+    initInbodyView();
   }
   init();
 
