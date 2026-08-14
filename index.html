@@ -1,66 +1,33 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>KOKI'S LOG — 筋トレ記録 & AIフィードバック</title>
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #F5F1E8;
-    --page-bg: #EDE7D8;
-    --surface: #FFFFFF;
-    --surface-2: #FBF7EF;
-    --text: #211D19;
-    --text-muted: #756F66;
-    --text-faint: #A69E8E;
-    --border: #E4DDCE;
-    --accent: #A83726;
-    --accent-soft: #F1DAD2;
-    --accent-ink: #FFF8F0;
-    --success: #3F7D5C;
-    --success-soft: #DCEBE1;
-    --nav-bg: #FFFFFF;
-    --shadow: 0 20px 45px -20px rgba(33, 29, 25, 0.35);
-  }
-  :root[data-theme="dark"] {
-    --bg: #17161A;
-    --page-bg: #0F0E11;
-    --surface: #201E22;
-    --surface-2: #29262B;
-    --text: #F3EFE8;
-    --text-muted: #A39C90;
-    --text-faint: #716B62;
-    --border: #322E31;
-    --accent: #E0553B;
-    --accent-soft: #3A241F;
-    --accent-ink: #FFF8F0;
-    --success: #5FBE93;
-    --success-soft: #21332B;
-    --nav-bg: #1C1A1E;
-    --shadow: 0 25px 50px -20px rgba(0, 0, 0, 0.6);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #17161A;
-      --page-bg: #0F0E11;
-      --surface: #201E22;
-      --surface-2: #29262B;
-      --text: #F3EFE8;
-      --text-muted: #A39C90;
-      --text-faint: #716B62;
-      --border: #322E31;
-      --accent: #E0553B;
-      --accent-soft: #3A241F;
-      --accent-ink: #FFF8F0;
-      --success: #5FBE93;
-      --success-soft: #21332B;
-      --nav-bg: #1C1A1E;
-      --shadow: 0 25px 50px -20px rgba(0, 0, 0, 0.6);
-    }
+    color-scheme: dark;
+    /* Dark base + electric cyan/blue accent */
+    --bg: #0E1217;
+    --page-bg: #05070A;
+    --surface: #151B23;
+    --surface-2: #1E2630;
+    --text: #E9F1F7;
+    --text-muted: #93A2B3;
+    --text-faint: #5A6675;
+    --border: #253039;
+    --accent: #22D3EE;
+    --accent-2: #3B82F6;
+    --accent-grad: linear-gradient(135deg, #22D3EE 0%, #3B82F6 100%);
+    --accent-soft: rgba(34, 211, 238, 0.13);
+    --accent-ink: #04141A;
+    --success: #34D399;
+    --success-soft: rgba(52, 211, 153, 0.13);
+    --nav-bg: #0A0F14;
+    --shadow: 0 26px 60px -24px rgba(0, 0, 0, 0.8);
   }
 
   * { box-sizing: border-box; }
@@ -98,7 +65,11 @@
     border-bottom: 1px solid var(--border);
   }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+  .brand-name {
+    font-size: 17px; font-weight: 800; letter-spacing: 0.01em;
+    background: var(--accent-grad); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
   .icon-btn {
     width: 36px; height: 36px; padding: 0; border-radius: 10px;
     border: 1px solid var(--border); background: var(--surface);
@@ -145,13 +116,25 @@
   .screen-desc { font-size: 12.5px; color: var(--text-muted); margin: 2px 0 0; line-height: 1.6; }
   .screen-header {
     text-align: center;
-    background: var(--accent);
+    background:
+      radial-gradient(130% 150% at 50% -30%, rgba(34, 211, 238, 0.16), rgba(59, 130, 246, 0.05) 45%, transparent 70%),
+      linear-gradient(180deg, var(--surface), var(--bg));
     margin: -16px -20px 18px;
-    padding: 18px 22px 16px;
-    border-radius: 0 0 20px 20px;
+    padding: 22px 22px 18px;
+    border-radius: 0 0 22px 22px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
   }
-  .screen-header .screen-title { color: var(--accent-ink); }
-  .screen-header .screen-desc { color: rgba(255, 248, 240, 0.82); }
+  .screen-header::after {
+    content: ""; position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%);
+    width: 64px; height: 2px; border-radius: 2px; background: var(--accent-grad);
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+  }
+  .screen-header .screen-title {
+    background: var(--accent-grad); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .screen-header .screen-desc { color: var(--text-muted); }
 
   .pillrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
   .pill {
@@ -190,10 +173,12 @@
   .prev-hint { font-size: 11.5px; color: var(--text-muted); padding: 2px 2px 0; }
   .prev-hint strong { color: var(--text); font-variant-numeric: tabular-nums; }
 
-  .btn { appearance: none; border: none; font: inherit; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; cursor: pointer; width: 100%; }
-  .btn-primary { background: var(--accent); color: var(--accent-ink); }
-  .btn-primary:disabled { opacity: 0.6; cursor: default; }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn { appearance: none; border: none; font: inherit; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; cursor: pointer; width: 100%; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .btn-primary { background: var(--accent-grad); color: var(--accent-ink); box-shadow: 0 10px 24px -10px rgba(34, 211, 238, 0.55); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-primary:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+  .btn-outline { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:active { transform: translateY(1px); }
 
   .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-top: 2px; }
   .section-heading h3 { font-size: 14px; margin: 0; font-weight: 800; }
@@ -325,7 +310,8 @@
   .bottom-nav { flex-shrink: 0; display: flex; border-top: 1px solid var(--border); background: var(--nav-bg); padding-bottom: env(safe-area-inset-bottom); }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; color: var(--text-faint); background: none; border: none; font: inherit; cursor: pointer; }
   .nav-item.active { color: var(--accent); }
-  .nav-item svg { width: 20px; height: 20px; }
+  .nav-item.active svg { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55)); }
+  .nav-item svg { width: 20px; height: 20px; transition: filter 0.15s ease; }
   .nav-item span { font-size: 10.5px; font-weight: 700; }
 
   .settings-overlay {
@@ -387,12 +373,12 @@
 
   /* ===== workout summary card (progress screen hero) ===== */
   .summary-card {
-    background: #0D0D10;
+    background: linear-gradient(165deg, #131A23 0%, #0B0F14 100%);
     color: #F4F4F6;
-    border: 1px solid #24242A;
+    border: 1px solid #24313C;
     border-radius: 20px;
     padding: 20px 18px;
-    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
   .sc-caption {
     text-align: center; font-size: 14px; font-weight: 700; line-height: 1.45;
