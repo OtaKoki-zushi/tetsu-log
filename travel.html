@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>TRIP BUDGET — 旅行の出費計算</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0E1217;
+    --page-bg: #05070A;
+    --surface: #151B23;
+    --surface-2: #1E2630;
+    --text: #E9F1F7;
+    --text-muted: #93A2B3;
+    --text-faint: #5A6675;
+    --border: #253039;
+    --accent: #22D3EE;
+    --accent-2: #3B82F6;
+    --accent-grad: linear-gradient(135deg, #22D3EE 0%, #3B82F6 100%);
+    --accent-soft: rgba(34, 211, 238, 0.13);
+    --accent-ink: #04141A;
+    --success: #34D399;
+    --danger: #F87171;
+    --warn: #FBBF24;
+    --nav-bg: #0A0F14;
+    --shadow: 0 26px 60px -24px rgba(0, 0, 0, 0.8);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    background: var(--page-bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+      "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", "Segoe UI", sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    height: 100dvh;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  @media (min-width: 481px) {
+    .app { box-shadow: var(--shadow); height: calc(100dvh - 40px); margin: 20px auto; border-radius: 24px; }
+  }
+
+  .app-header {
+    padding: max(18px, env(safe-area-inset-top)) 20px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; border-bottom: 1px solid var(--border);
+  }
+  .brand-name {
+    font-size: 17px; font-weight: 800; letter-spacing: 0.01em;
+    background: var(--accent-grad); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .header-trip { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; font-weight: 600; }
+  .icon-btn {
+    width: 36px; height: 36px; padding: 0; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); flex-shrink: 0; cursor: pointer;
+  }
+
+  .screens { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .screen { display: none; padding: 16px 16px 24px; }
+  .screen.active { display: block; }
+
+  .section-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-faint); margin: 0 0 10px;
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px; margin-bottom: 14px;
+  }
+  .card.flat { padding: 14px; }
+
+  .field { margin-bottom: 12px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+  input[type="text"], input[type="number"], input[type="date"], select, textarea {
+    width: 100%; padding: 11px 12px; border-radius: 11px;
+    border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text); font-size: 15px;
+  }
+  input::placeholder, textarea::placeholder { color: var(--text-faint); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 13px 16px; border-radius: 12px; border: none;
+    background: var(--accent-grad); color: var(--accent-ink);
+    font-size: 15px; font-weight: 800; cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn.ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); }
+  .btn.small { width: auto; padding: 9px 14px; font-size: 13px; border-radius: 10px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-muted);
+    font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .chips.scroll::-webkit-scrollbar { display: none; }
+
+  .total-card {
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(59, 130, 246, 0.1));
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    border-radius: 18px; padding: 18px; margin-bottom: 14px;
+  }
+  .total-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.04em; }
+  .total-value { font-size: 32px; font-weight: 900; margin-top: 4px; letter-spacing: -0.02em; }
+  .total-value small { font-size: 16px; font-weight: 800; margin-left: 2px; color: var(--text-muted); }
+  .total-sub { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+  .total-sub div { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .total-sub b { display: block; font-size: 15px; color: var(--text); font-weight: 800; margin-top: 2px; }
+
+  .bar-track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 10px; }
+  .bar-fill { height: 100%; border-radius: 999px; background: var(--accent-grad); transition: width 0.25s ease; }
+  .bar-fill.over { background: linear-gradient(135deg, #F87171, #FB7185); }
+
+  .day-group { margin-bottom: 16px; }
+  .day-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 0 4px 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .day-head .day-name { font-size: 13.5px; font-weight: 800; }
+  .day-head .day-date { font-size: 11px; color: var(--text-faint); font-weight: 600; margin-left: 6px; }
+  .day-head .day-total { font-size: 13px; font-weight: 800; color: var(--accent); }
+
+  .expense {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px; margin-bottom: 8px;
+    width: 100%; text-align: left; cursor: pointer; color: inherit; font: inherit;
+  }
+  .expense:active { background: var(--surface-2); }
+  .exp-icon {
+    width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .exp-body { flex: 1; min-width: 0; }
+  .exp-title { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exp-meta { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; font-weight: 600; }
+  .exp-amount { font-size: 15px; font-weight: 800; white-space: nowrap; }
+
+  .breakdown-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .breakdown-row:last-child { margin-bottom: 0; }
+  .bd-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .bd-body { flex: 1; min-width: 0; }
+  .bd-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 700; }
+  .bd-top .pct { font-size: 11px; color: var(--text-faint); font-weight: 700; margin-left: 6px; }
+  .bd-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+  .bd-fill { height: 100%; border-radius: 999px; }
+
+  .daychart { display: flex; align-items: flex-end; gap: 6px; padding-top: 8px; }
+  .daychart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .daychart .col .stack {
+    width: 100%; max-width: 34px; height: 108px;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    border-bottom: 1px solid var(--border);
+  }
+  .daychart .col .stack i { display: block; width: 100%; min-height: 3px; border-radius: 4px 4px 0 0; }
+  .daychart .col .lbl { font-size: 10px; color: var(--text-faint); font-weight: 700; }
+  .daychart-amounts { display: flex; gap: 6px; margin-top: 6px; }
+  .daychart-amounts span { flex: 1; text-align: center; font-size: 9.5px; color: var(--text-muted); font-weight: 700; min-width: 0; overflow: hidden; }
+
+  .trip-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px; margin-bottom: 10px;
+    width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer;
+  }
+  .trip-card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .trip-name { font-size: 15px; font-weight: 800; }
+  .trip-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; font-weight: 600; }
+  .trip-amount { text-align: right; font-size: 14px; font-weight: 800; white-space: nowrap; }
+  .trip-amount small { display: block; font-size: 10.5px; color: var(--text-faint); font-weight: 700; margin-top: 2px; }
+
+  .empty { text-align: center; padding: 34px 18px; color: var(--text-faint); }
+  .empty .big { font-size: 30px; margin-bottom: 8px; }
+  .empty p { font-size: 13px; margin: 0 0 4px; font-weight: 600; }
+
+  .hint { font-size: 11.5px; color: var(--text-faint); margin: 6px 2px 0; line-height: 1.6; }
+
+  .bottom-nav {
+    display: flex; background: var(--nav-bg); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom); flex-shrink: 0;
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 0 12px; color: var(--text-faint); background: none; border: none;
+    font: inherit; cursor: pointer;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item.active svg { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55)); }
+  .nav-item svg { width: 20px; height: 20px; }
+  .nav-item span { font-size: 10.5px; font-weight: 700; }
+
+  .sheet-overlay {
+    position: absolute; inset: 0; background: rgba(3, 6, 10, 0.72);
+    display: none; align-items: flex-end; z-index: 30;
+  }
+  .sheet-overlay.open { display: flex; }
+  .sheet {
+    width: 100%; background: var(--bg); border-radius: 22px 22px 0 0;
+    border-top: 1px solid var(--border); padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height: 88%; overflow-y: auto;
+  }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .sheet-title { font-size: 16px; font-weight: 800; }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 84px; transform: translate(-50%, 8px);
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 40;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div>
+      <div class="brand-name">TRIP BUDGET</div>
+      <div class="header-trip" id="headerTrip">旅行を登録してください</div>
+    </div>
+    <button class="icon-btn" id="exportBtn" title="集計をコピー" aria-label="集計をコピー">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </button>
+  </header>
+
+  <div class="screens">
+    <!-- ===== 記録 ===== -->
+    <section class="screen active" id="screen-record">
+      <div id="recordBody"></div>
+    </section>
+
+    <!-- ===== 集計 ===== -->
+    <section class="screen" id="screen-summary">
+      <div id="summaryBody"></div>
+    </section>
+
+    <!-- ===== 旅行 ===== -->
+    <section class="screen" id="screen-trips">
+      <h2 class="section-title">旅行リスト</h2>
+      <div id="tripList"></div>
+      <button class="btn" id="newTripBtn">＋ 新しい旅行を追加</button>
+      <p class="hint">データはこの端末のブラウザ(localStorage)にのみ保存されます。</p>
+    </section>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-target="record">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1v22"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+      </svg>
+      <span>Record</span>
+    </button>
+    <button class="nav-item" data-target="summary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path>
+      </svg>
+      <span>Summary</span>
+    </button>
+    <button class="nav-item" data-target="trips">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"></path>
+      </svg>
+      <span>Trips</span>
+    </button>
+  </nav>
+
+  <!-- 旅行の作成・編集シート -->
+  <div class="sheet-overlay" id="tripSheet">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="sheet-title" id="tripSheetTitle">新しい旅行</div>
+        <button class="icon-btn" data-close="tripSheet" aria-label="閉じる">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="field">
+        <label for="tripName">旅行名</label>
+        <input type="text" id="tripName" placeholder="例）沖縄旅行" maxlength="40">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="tripStart">出発日</label>
+          <input type="date" id="tripStart">
+        </div>
+        <div class="field">
+          <label for="tripDays">日数</label>
+          <input type="number" id="tripDays" min="1" max="60" step="1" inputmode="numeric" placeholder="3">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="tripBudget">予算（円・任意）</label>
+          <input type="number" id="tripBudget" min="0" step="1000" inputmode="numeric" placeholder="100000">
+        </div>
+        <div class="field">
+          <label for="tripPeople">人数</label>
+          <input type="number" id="tripPeople" min="1" max="50" step="1" inputmode="numeric" placeholder="1">
+        </div>
+      </div>
+      <button class="btn" id="tripSaveBtn">保存する</button>
+      <button class="btn danger small" id="tripDeleteBtn" style="width:100%;margin-top:10px;">この旅行を削除</button>
+    </div>
+  </div>
+
+  <!-- 出費の編集シート -->
+  <div class="sheet-overlay" id="expenseSheet">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="sheet-title">出費を編集</div>
+        <button class="icon-btn" data-close="expenseSheet" aria-label="閉じる">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="field">
+        <label>カテゴリ</label>
+        <div class="chips" id="editCategories"></div>
+      </div>
+      <div class="field">
+        <label for="editDay">何日目</label>
+        <select id="editDay"></select>
+      </div>
+      <div class="field">
+        <label for="editTitle">内容</label>
+        <input type="text" id="editTitle" placeholder="例）新幹線" maxlength="40">
+      </div>
+      <div class="field">
+        <label for="editAmount">金額（円）</label>
+        <input type="number" id="editAmount" min="0" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="editMemo">メモ（任意）</label>
+        <input type="text" id="editMemo" maxlength="80" placeholder="誰が払ったか など">
+      </div>
+      <button class="btn" id="editSaveBtn">更新する</button>
+      <button class="btn danger small" id="editDeleteBtn" style="width:100%;margin-top:10px;">削除する</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'trip-budget-v1';
+
+  var CATEGORIES = [
+    { key: 'transport',   label: '交通',   icon: '🚃', color: '#3B82F6' },
+    { key: 'stay',        label: '宿泊',   icon: '🏨', color: '#8B5CF6' },
+    { key: 'food',        label: '食事',   icon: '🍽', color: '#F59E0B' },
+    { key: 'sightseeing', label: '観光',   icon: '🎟', color: '#22D3EE' },
+    { key: 'shopping',    label: '買い物', icon: '🛍', color: '#EC4899' },
+    { key: 'other',       label: 'その他', icon: '✨', color: '#34D399' }
+  ];
+  var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+  function $(id) { return document.getElementById(id); }
+  function categoryOf(key) {
+    for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].key === key) return CATEGORIES[i];
+    return CATEGORIES[CATEGORIES.length - 1];
+  }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function yen(n) { return '¥' + Math.round(n || 0).toLocaleString('ja-JP'); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function clampInt(v, min, max, fallback) {
+    var n = parseInt(v, 10);
+    if (!isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  // ---------- state ----------
+  var state = { trips: [], activeTripId: null };
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.trips)) {
+        state.trips = parsed.trips;
+        state.activeTripId = parsed.activeTripId || (parsed.trips[0] && parsed.trips[0].id) || null;
+      }
+    } catch (e) { /* 壊れたデータは無視して初期状態で開く */ }
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch (e) { toast('保存できませんでした'); }
+  }
+  function activeTrip() {
+    for (var i = 0; i < state.trips.length; i++) if (state.trips[i].id === state.activeTripId) return state.trips[i];
+    return null;
+  }
+  function tripTotal(trip) {
+    return trip.expenses.reduce(function (sum, e) { return sum + e.amount; }, 0);
+  }
+  function dayLabel(trip, day) {
+    if (!trip.startDate) return day + '日目';
+    var d = new Date(trip.startDate + 'T00:00:00');
+    if (isNaN(d.getTime())) return day + '日目';
+    d.setDate(d.getDate() + (day - 1));
+    return day + '日目 ' + (d.getMonth() + 1) + '/' + d.getDate() + '(' + WEEKDAYS[d.getDay()] + ')';
+  }
+  function dateOnly(trip, day) {
+    var label = dayLabel(trip, day);
+    var sp = label.indexOf(' ');
+    return sp === -1 ? '' : label.slice(sp + 1);
+  }
+
+  // ---------- toast ----------
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  // ---------- screens ----------
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(function (el) {
+      el.classList.toggle('active', el.id === 'screen-' + name);
+    });
+    document.querySelectorAll('.nav-item').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.target === name);
+    });
+    document.querySelector('.screens').scrollTop = 0;
+  }
+  document.querySelectorAll('.nav-item').forEach(function (btn) {
+    btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
+  });
+
+  // ---------- 記録画面 ----------
+  var addForm = { category: 'food', day: 1 };
+
+  function renderRecordShell() {
+    $('recordBody').innerHTML =
+      '<div id="recordTotals"></div>' +
+      '<div class="card">' +
+        '<h2 class="section-title">出費を追加</h2>' +
+        '<div class="field"><label>カテゴリ</label><div class="chips" id="addCategories"></div></div>' +
+        '<div class="field"><label>何日目</label><div class="chips scroll" id="addDays"></div></div>' +
+        '<div class="row">' +
+          '<div class="field"><label for="addTitle">内容</label>' +
+            '<input type="text" id="addTitle" placeholder="例）ランチ" maxlength="40"></div>' +
+          '<div class="field"><label for="addAmount">金額（円）</label>' +
+            '<input type="number" id="addAmount" min="0" step="1" inputmode="numeric" placeholder="1200"></div>' +
+        '</div>' +
+        '<div class="field"><label for="addMemo">メモ（任意）</label>' +
+          '<input type="text" id="addMemo" maxlength="80" placeholder="誰が払ったか など"></div>' +
+        '<button class="btn" id="addBtn">＋ 追加する</button>' +
+      '</div>' +
+      '<h2 class="section-title">出費の履歴</h2>' +
+      '<div id="expenseList"></div>';
+
+    $('addCategories').addEventListener('click', function (ev) {
+      var chip = ev.target.closest('.chip');
+      if (!chip) return;
+      addForm.category = chip.dataset.key;
+      renderAddChips();
+    });
+    $('addDays').addEventListener('click', function (ev) {
+      var chip = ev.target.closest('.chip');
+      if (!chip) return;
+      addForm.day = parseInt(chip.dataset.day, 10);
+      renderAddChips();
+    });
+    $('addBtn').addEventListener('click', addExpense);
+    $('addAmount').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') addExpense();
+    });
+    $('expenseList').addEventListener('click', function (ev) {
+      var row = ev.target.closest('.expense');
+      if (row) openExpenseSheet(row.dataset.id);
+    });
+  }
+
+  function renderAddChips() {
+    var trip = activeTrip();
+    if (!trip) return;
+    $('addCategories').innerHTML = CATEGORIES.map(function (c) {
+      return '<button class="chip' + (c.key === addForm.category ? ' active' : '') + '" data-key="' + c.key + '">' +
+        c.icon + ' ' + c.label + '</button>';
+    }).join('');
+    var days = '';
+    for (var d = 1; d <= trip.days; d++) {
+      days += '<button class="chip' + (d === addForm.day ? ' active' : '') + '" data-day="' + d + '">' +
+        escapeHtml(dayLabel(trip, d)) + '</button>';
+    }
+    $('addDays').innerHTML = days;
+    var activeChip = $('addDays').querySelector('.chip.active');
+    if (activeChip) activeChip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function addExpense() {
+    var trip = activeTrip();
+    if (!trip) return;
+    var amount = Math.round(parseFloat($('addAmount').value));
+    if (!isFinite(amount) || amount <= 0) { toast('金額を入力してください'); $('addAmount').focus(); return; }
+    var title = $('addTitle').value.trim();
+    trip.expenses.push({
+      id: uid(),
+      day: Math.min(addForm.day, trip.days),
+      category: addForm.category,
+      title: title || categoryOf(addForm.category).label,
+      amount: amount,
+      memo: $('addMemo').value.trim(),
+      createdAt: Date.now()
+    });
+    save();
+    $('addTitle').value = '';
+    $('addAmount').value = '';
+    $('addMemo').value = '';
+    renderAll();
+    toast(yen(amount) + ' を追加しました');
+  }
+
+  function renderRecord() {
+    var trip = activeTrip();
+    if (!trip) {
+      $('recordBody').innerHTML =
+        '<div class="empty"><div class="big">🧳</div>' +
+        '<p>まだ旅行が登録されていません</p>' +
+        '<p>「Trips」タブから旅行を追加してください</p></div>' +
+        '<button class="btn" id="emptyNewTrip" style="margin-top:8px;">＋ 新しい旅行を追加</button>';
+      $('emptyNewTrip').addEventListener('click', function () { showScreen('trips'); openTripSheet(null); });
+      return;
+    }
+    if (!$('recordTotals')) renderRecordShell();
+    if (addForm.day > trip.days) addForm.day = trip.days;
+
+    var total = tripTotal(trip);
+    var perDay = total / trip.days;
+    var perPerson = total / trip.people;
+    var budgetHtml = '';
+    if (trip.budget) {
+      var rest = trip.budget - total;
+      var pct = Math.min(100, (total / trip.budget) * 100);
+      budgetHtml =
+        '<div class="bar-track"><div class="bar-fill' + (rest < 0 ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+        '<div class="total-sub"><div>予算 ' + yen(trip.budget) + '　' +
+        (rest >= 0 ? '残り <b style="display:inline;color:var(--success)">' + yen(rest) + '</b>'
+                   : '<b style="display:inline;color:var(--danger)">' + yen(-rest) + ' オーバー</b>') +
+        '</div></div>';
+    }
+    $('recordTotals').innerHTML =
+      '<div class="total-card">' +
+        '<div class="total-label">合計出費</div>' +
+        '<div class="total-value">' + yen(total) + '</div>' +
+        '<div class="total-sub">' +
+          '<div>1日あたり<b>' + yen(perDay) + '</b></div>' +
+          '<div>1人あたり<b>' + yen(perPerson) + '</b></div>' +
+          '<div>件数<b>' + trip.expenses.length + ' 件</b></div>' +
+        '</div>' + budgetHtml +
+      '</div>';
+
+    renderAddChips();
+    renderExpenseList(trip);
+  }
+
+  function renderExpenseList(trip) {
+    if (!trip.expenses.length) {
+      $('expenseList').innerHTML =
+        '<div class="empty"><div class="big">🧾</div><p>まだ出費がありません</p>' +
+        '<p>上のフォームから追加してみましょう</p></div>';
+      return;
+    }
+    var byDay = {};
+    trip.expenses.forEach(function (e) {
+      (byDay[e.day] = byDay[e.day] || []).push(e);
+    });
+    var days = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; });
+    $('expenseList').innerHTML = days.map(function (day) {
+      var list = byDay[day].slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
+      var dayTotal = list.reduce(function (s, e) { return s + e.amount; }, 0);
+      var rows = list.map(function (e) {
+        var c = categoryOf(e.category);
+        return '<button class="expense" data-id="' + e.id + '">' +
+          '<span class="exp-icon" style="background:' + c.color + '22;">' + c.icon + '</span>' +
+          '<span class="exp-body">' +
+            '<span class="exp-title">' + escapeHtml(e.title) + '</span>' +
+            '<span class="exp-meta">' + escapeHtml(c.label) + (e.memo ? '・' + escapeHtml(e.memo) : '') + '</span>' +
+          '</span>' +
+          '<span class="exp-amount">' + yen(e.amount) + '</span>' +
+        '</button>';
+      }).join('');
+      return '<div class="day-group">' +
+        '<div class="day-head"><div><span class="day-name">' + day + '日目</span>' +
+        '<span class="day-date">' + escapeHtml(dateOnly(trip, day)) + '</span></div>' +
+        '<div class="day-total">' + yen(dayTotal) + '</div></div>' + rows + '</div>';
+    }).join('');
+  }
+
+  // ---------- 集計画面 ----------
+  function renderSummary() {
+    var trip = activeTrip();
+    if (!trip) {
+      $('summaryBody').innerHTML =
+        '<div class="empty"><div class="big">📊</div><p>旅行を登録すると集計が表示されます</p></div>';
+      return;
+    }
+    var total = tripTotal(trip);
+    if (!total) {
+      $('summaryBody').innerHTML =
+        '<div class="empty"><div class="big">📊</div><p>出費を追加すると集計が表示されます</p></div>';
+      return;
+    }
+
+    var byCategory = {};
+    var byDay = [];
+    for (var d = 0; d < trip.days; d++) byDay.push({ total: 0, parts: {} });
+    trip.expenses.forEach(function (e) {
+      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+      var idx = Math.min(trip.days, Math.max(1, e.day)) - 1;
+      byDay[idx].total += e.amount;
+      byDay[idx].parts[e.category] = (byDay[idx].parts[e.category] || 0) + e.amount;
+    });
+
+    var html = '';
+    var perPerson = total / trip.people;
+    html += '<div class="total-card">' +
+      '<div class="total-label">' + escapeHtml(trip.name) + 'の合計</div>' +
+      '<div class="total-value">' + yen(total) + '</div>' +
+      '<div class="total-sub">' +
+        '<div>' + trip.days + '日間・1日あたり<b>' + yen(total / trip.days) + '</b></div>' +
+        '<div>' + trip.people + '人で割ると<b>' + yen(perPerson) + '</b></div>' +
+      '</div></div>';
+
+    if (trip.budget) {
+      var rest = trip.budget - total;
+      var pct = Math.min(100, (total / trip.budget) * 100);
+      html += '<div class="card">' +
+        '<h2 class="section-title">予算</h2>' +
+        '<div class="bd-top"><span>' + yen(total) + ' / ' + yen(trip.budget) + '</span>' +
+        '<span style="color:' + (rest >= 0 ? 'var(--success)' : 'var(--danger)') + '">' +
+        (rest >= 0 ? '残り ' + yen(rest) : yen(-rest) + ' オーバー') + '</span></div>' +
+        '<div class="bar-track"><div class="bar-fill' + (rest < 0 ? ' over' : '') + '" style="width:' + pct + '%"></div></div>' +
+        '<p class="hint">1日あたりに使える残額：' + yen(Math.max(0, rest) / trip.days) + '</p>' +
+      '</div>';
+    }
+
+    var cats = CATEGORIES.filter(function (c) { return byCategory[c.key]; })
+      .sort(function (a, b) { return byCategory[b.key] - byCategory[a.key]; });
+    html += '<div class="card"><h2 class="section-title">カテゴリ別</h2>' +
+      cats.map(function (c) {
+        var amount = byCategory[c.key];
+        var pct = (amount / total) * 100;
+        return '<div class="breakdown-row">' +
+          '<span class="bd-icon" style="background:' + c.color + '22;">' + c.icon + '</span>' +
+          '<span class="bd-body">' +
+            '<span class="bd-top"><span>' + c.label + '<span class="pct">' + pct.toFixed(0) + '%</span></span>' +
+            '<span>' + yen(amount) + '</span></span>' +
+            '<span class="bd-track"><span class="bd-fill" style="width:' + pct + '%;background:' + c.color + '"></span></span>' +
+          '</span></div>';
+      }).join('') + '</div>';
+
+    var maxDay = byDay.reduce(function (m, x) { return Math.max(m, x.total); }, 0) || 1;
+    html += '<div class="card"><h2 class="section-title">日別</h2><div class="daychart">' +
+      byDay.map(function (info, i) {
+        var stack = CATEGORIES.filter(function (c) { return info.parts[c.key]; }).map(function (c) {
+          var h = (info.parts[c.key] / maxDay) * 100;
+          return '<i style="height:' + h + '%;background:' + c.color + '"></i>';
+        }).join('');
+        return '<div class="col"><div class="stack">' + stack + '</div><div class="lbl">' + (i + 1) + '</div></div>';
+      }).join('') + '</div><div class="daychart-amounts">' +
+      byDay.map(function (info) {
+        return '<span>' + (info.total ? Math.round(info.total / 1000) + 'k' : '-') + '</span>';
+      }).join('') + '</div>' +
+      '<p class="hint">棒の高さは1日の出費、色はカテゴリの内訳です（数値は千円単位）。</p></div>';
+
+    if (trip.people > 1) {
+      html += '<div class="card"><h2 class="section-title">割り勘</h2>' +
+        '<div class="bd-top"><span>' + trip.people + '人で均等割り</span><span>' + yen(perPerson) + ' / 人</span></div>' +
+        '<p class="hint">立て替えた人はメモ欄に残しておくと精算しやすくなります。</p></div>';
+    }
+
+    $('summaryBody').innerHTML = html;
+  }
+
+  // ---------- 旅行リスト ----------
+  function renderTrips() {
+    if (!state.trips.length) {
+      $('tripList').innerHTML = '<div class="empty"><div class="big">🧳</div><p>旅行がまだありません</p></div>';
+      return;
+    }
+    $('tripList').innerHTML = state.trips.map(function (t) {
+      var meta = (t.startDate ? t.startDate.replace(/-/g, '/') + '・' : '') + t.days + '日間・' + t.people + '人' +
+        (t.budget ? '・予算' + yen(t.budget) : '');
+      return '<div class="trip-card' + (t.id === state.activeTripId ? ' active' : '') + '" data-id="' + t.id + '">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="trip-name">' + escapeHtml(t.name) + '</div>' +
+          '<div class="trip-meta">' + escapeHtml(meta) + '</div>' +
+        '</div>' +
+        '<div class="trip-amount">' + yen(tripTotal(t)) + '<small>' + t.expenses.length + '件</small></div>' +
+        '<button class="icon-btn" data-edit="' + t.id + '" aria-label="編集">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>' +
+        '</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  $('tripList').addEventListener('click', function (ev) {
+    var editBtn = ev.target.closest('[data-edit]');
+    if (editBtn) { openTripSheet(editBtn.dataset.edit); return; }
+    var card = ev.target.closest('.trip-card');
+    if (!card) return;
+    state.activeTripId = card.dataset.id;
+    addForm.day = 1;
+    save();
+    renderAll();
+    showScreen('record');
+  });
+  $('newTripBtn').addEventListener('click', function () { openTripSheet(null); });
+
+  // ---------- 旅行シート ----------
+  var editingTripId = null;
+
+  function openTripSheet(tripId) {
+    editingTripId = tripId;
+    var trip = null;
+    if (tripId) {
+      for (var i = 0; i < state.trips.length; i++) if (state.trips[i].id === tripId) trip = state.trips[i];
+    }
+    $('tripSheetTitle').textContent = trip ? '旅行を編集' : '新しい旅行';
+    $('tripName').value = trip ? trip.name : '';
+    $('tripStart').value = trip ? (trip.startDate || '') : new Date().toISOString().slice(0, 10);
+    $('tripDays').value = trip ? trip.days : 3;
+    $('tripBudget').value = trip && trip.budget ? trip.budget : '';
+    $('tripPeople').value = trip ? trip.people : 1;
+    $('tripDeleteBtn').style.display = trip ? '' : 'none';
+    $('tripSheet').classList.add('open');
+  }
+
+  $('tripSaveBtn').addEventListener('click', function () {
+    var name = $('tripName').value.trim();
+    if (!name) { toast('旅行名を入力してください'); $('tripName').focus(); return; }
+    var days = clampInt($('tripDays').value, 1, 60, 1);
+    var people = clampInt($('tripPeople').value, 1, 50, 1);
+    var budgetRaw = parseFloat($('tripBudget').value);
+    var budget = isFinite(budgetRaw) && budgetRaw > 0 ? Math.round(budgetRaw) : null;
+    var startDate = $('tripStart').value || '';
+
+    var trip = null;
+    for (var i = 0; i < state.trips.length; i++) if (state.trips[i].id === editingTripId) trip = state.trips[i];
+    if (trip) {
+      trip.name = name; trip.days = days; trip.people = people; trip.budget = budget; trip.startDate = startDate;
+      // 日数を減らした場合は、はみ出した出費を最終日にまとめる
+      trip.expenses.forEach(function (e) { if (e.day > days) e.day = days; });
+    } else {
+      trip = { id: uid(), name: name, days: days, people: people, budget: budget, startDate: startDate, expenses: [] };
+      state.trips.push(trip);
+      state.activeTripId = trip.id;
+      addForm.day = 1;
+    }
+    save();
+    $('tripSheet').classList.remove('open');
+    renderAll();
+    showScreen('record');
+    toast('保存しました');
+  });
+
+  $('tripDeleteBtn').addEventListener('click', function () {
+    if (!editingTripId) return;
+    if (!confirm('この旅行と出費をすべて削除しますか？')) return;
+    state.trips = state.trips.filter(function (t) { return t.id !== editingTripId; });
+    if (state.activeTripId === editingTripId) {
+      state.activeTripId = state.trips.length ? state.trips[0].id : null;
+    }
+    save();
+    $('tripSheet').classList.remove('open');
+    renderAll();
+    toast('削除しました');
+  });
+
+  // ---------- 出費シート ----------
+  var editingExpenseId = null;
+  var editingCategory = 'food';
+
+  function openExpenseSheet(expenseId) {
+    var trip = activeTrip();
+    if (!trip) return;
+    var exp = null;
+    for (var i = 0; i < trip.expenses.length; i++) if (trip.expenses[i].id === expenseId) exp = trip.expenses[i];
+    if (!exp) return;
+    editingExpenseId = expenseId;
+    editingCategory = exp.category;
+    renderEditCategories();
+    var opts = '';
+    for (var d = 1; d <= trip.days; d++) {
+      opts += '<option value="' + d + '"' + (d === exp.day ? ' selected' : '') + '>' + escapeHtml(dayLabel(trip, d)) + '</option>';
+    }
+    $('editDay').innerHTML = opts;
+    $('editTitle').value = exp.title;
+    $('editAmount').value = exp.amount;
+    $('editMemo').value = exp.memo || '';
+    $('expenseSheet').classList.add('open');
+  }
+
+  function renderEditCategories() {
+    $('editCategories').innerHTML = CATEGORIES.map(function (c) {
+      return '<button class="chip' + (c.key === editingCategory ? ' active' : '') + '" data-key="' + c.key + '">' +
+        c.icon + ' ' + c.label + '</button>';
+    }).join('');
+  }
+  $('editCategories').addEventListener('click', function (ev) {
+    var chip = ev.target.closest('.chip');
+    if (!chip) return;
+    editingCategory = chip.dataset.key;
+    renderEditCategories();
+  });
+
+  $('editSaveBtn').addEventListener('click', function () {
+    var trip = activeTrip();
+    if (!trip) return;
+    var amount = Math.round(parseFloat($('editAmount').value));
+    if (!isFinite(amount) || amount <= 0) { toast('金額を入力してください'); return; }
+    trip.expenses.forEach(function (e) {
+      if (e.id !== editingExpenseId) return;
+      e.category = editingCategory;
+      e.day = clampInt($('editDay').value, 1, trip.days, 1);
+      e.title = $('editTitle').value.trim() || categoryOf(editingCategory).label;
+      e.amount = amount;
+      e.memo = $('editMemo').value.trim();
+    });
+    save();
+    $('expenseSheet').classList.remove('open');
+    renderAll();
+    toast('更新しました');
+  });
+
+  $('editDeleteBtn').addEventListener('click', function () {
+    var trip = activeTrip();
+    if (!trip) return;
+    trip.expenses = trip.expenses.filter(function (e) { return e.id !== editingExpenseId; });
+    save();
+    $('expenseSheet').classList.remove('open');
+    renderAll();
+    toast('削除しました');
+  });
+
+  document.querySelectorAll('[data-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () { $(btn.dataset.close).classList.remove('open'); });
+  });
+  document.querySelectorAll('.sheet-overlay').forEach(function (overlay) {
+    overlay.addEventListener('click', function (ev) {
+      if (ev.target === overlay) overlay.classList.remove('open');
+    });
+  });
+
+  // ---------- 集計テキストのコピー ----------
+  function summaryText() {
+    var trip = activeTrip();
+    if (!trip) return '';
+    var total = tripTotal(trip);
+    var lines = ['【' + trip.name + '】' + trip.days + '日間 / ' + trip.people + '人'];
+    lines.push('合計 ' + yen(total) + '（1人あたり ' + yen(total / trip.people) + '）');
+    if (trip.budget) lines.push('予算 ' + yen(trip.budget) + ' / 残り ' + yen(trip.budget - total));
+    lines.push('');
+    CATEGORIES.forEach(function (c) {
+      var sum = trip.expenses.reduce(function (s, e) { return e.category === c.key ? s + e.amount : s; }, 0);
+      if (sum) lines.push(c.label + '：' + yen(sum));
+    });
+    lines.push('');
+    for (var d = 1; d <= trip.days; d++) {
+      var list = trip.expenses.filter(function (e) { return e.day === d; });
+      if (!list.length) continue;
+      lines.push('■ ' + dayLabel(trip, d) + '　' +
+        yen(list.reduce(function (s, e) { return s + e.amount; }, 0)));
+      list.forEach(function (e) { lines.push('  ・' + e.title + ' ' + yen(e.amount)); });
+    }
+    return lines.join('\n');
+  }
+
+  $('exportBtn').addEventListener('click', function () {
+    var text = summaryText();
+    if (!text) { toast('コピーする記録がありません'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('集計をコピーしました'); },
+        function () { fallbackCopy(text); });
+    } else {
+      fallbackCopy(text);
+    }
+  });
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('集計をコピーしました'); }
+    catch (e) { toast('コピーできませんでした'); }
+    document.body.removeChild(ta);
+  }
+
+  // ---------- 初期化 ----------
+  function renderAll() {
+    var trip = activeTrip();
+    $('headerTrip').textContent = trip
+      ? trip.name + '・' + trip.days + '日間' + (trip.people > 1 ? '・' + trip.people + '人' : '')
+      : '旅行を登録してください';
+    renderRecord();
+    renderSummary();
+    renderTrips();
+  }
+
+  load();
+  renderAll();
+  if (!state.trips.length) showScreen('trips');
+})();
+</script>
+</body>
+</html>
