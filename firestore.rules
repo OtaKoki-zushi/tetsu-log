@@ -1,14 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 本人だけが自分のデータを読み書きできる。
+    // users/{uid} 配下のサブコレクション（entries, meals, inbody, tabiTrips など）を
+    // まとめて許可しているので、アプリ側でコレクションを増やしてもルールの変更は不要。
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
-      match /entries/{entryId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-      }
-
-      match /meals/{mealId} {
+      match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }
