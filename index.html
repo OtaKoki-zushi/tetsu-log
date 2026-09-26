@@ -313,6 +313,35 @@
   .cal-legend .dot.country-JP { background: rgba(248, 113, 113, 0.8); }
   .cal-legend .dot.country-BE { background: rgba(251, 191, 36, 0.8); }
   .cal-legend b { color: var(--text); font-variant-numeric: tabular-nums; }
+  /* year view: 12 mini months, one tinted square per training day */
+  .yr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
+  .yr-month-label { font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .yr-month-label b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .yr-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .yr-cell { appearance: none; border: none; padding: 0; aspect-ratio: 1; border-radius: 3px; background: var(--surface-2); cursor: default; }
+  .yr-cell.empty { visibility: hidden; }
+  .yr-cell.future { opacity: 0.35; }
+  .yr-cell.today { outline: 1.5px solid var(--text); outline-offset: -1px; }
+  .yr-cell.has-entry { background: var(--accent); cursor: pointer; }
+  .yr-cell.has-entry.country-JP { background: rgba(248, 113, 113, 0.9); }
+  .yr-cell.has-entry.country-BE { background: rgba(251, 191, 36, 0.9); }
+  .yr-summary { display: flex; gap: 8px; margin: 10px 0 12px; }
+  .yr-stat { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; text-align: center; }
+  .yr-stat .n { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .yr-stat .n span { font-size: 11px; color: var(--text-faint); margin-left: 2px; }
+  .yr-stat .l { font-size: 10.5px; color: var(--text-muted); font-weight: 700; }
+  .history-range { display: flex; gap: 8px; margin-bottom: 12px; }
+  .history-range .pill { flex: 1; text-align: center; justify-content: center; }
+  .btn-danger { color: #F87171; border-color: rgba(248, 113, 113, 0.45); }
+  /* day detail: where this day's training happened, editable */
+  .dd-country { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; }
+  .dd-country .cur { font-size: 13.5px; font-weight: 800; }
+  .dd-country .cur .flag { font-size: 18px; margin-right: 6px; }
+  .dd-country .btn { width: auto; padding: 7px 12px; font-size: 12px; }
+  .dd-country-picker { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin: -4px 0 12px; }
+  .dd-country-picker.open { display: block; }
+  .dd-country-picker .pillrow { flex-wrap: wrap; }
+  .dd-country-picker .hint { font-size: 11px; color: var(--text-faint); margin: 8px 0 0; }
 
   .pr-badge { font-size: 10.5px; margin-right: 2px; }
   .chart-btn {
@@ -523,8 +552,13 @@
       <p class="screen-desc">日付をタップするとその日の記録を見られます。</p>
     </div>
 
+    <div class="history-range" id="historyRangeToggle">
+      <button class="pill active" type="button" data-range="month">月</button>
+      <button class="pill" type="button" data-range="year">年間</button>
+    </div>
     <div class="card">
       <div id="historyCalendar"></div>
+      <div id="historyYear" style="display:none"></div>
     </div>
   </section>
 
@@ -843,6 +877,8 @@
         <button type="button" class="ge-add-set" id="groupEditAddSet">＋ セットを追加</button>
         <div style="height:14px"></div>
         <button class="btn btn-primary" type="submit">保存する</button>
+        <div style="height:10px"></div>
+        <button class="btn btn-outline btn-danger" type="button" id="groupEditDeleteBtn">🗑 この種目を削除(この日の全セット)</button>
       </form>
     </div>
   </div>
@@ -1007,6 +1043,7 @@
     detectMode: 'idle', // idle | dict | ai | manual | loading
     historyFilter: 'すべて',
     historyView: 'list',
+    historyRange: 'month', // month | year
     exerciseFilter: 'すべて',
     graphGranularity: 'week',
     graphWeekStart: null,
@@ -1809,6 +1846,93 @@
     });
   }
 
+  var calendarYear = null; // year shown in the year view
+  function renderYearView() {
+    var container = $('historyYear');
+    if (!container) return;
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (!calendarYear) calendarYear = now.getFullYear();
+    var year = calendarYear;
+    var today = todayStr();
+
+    var byDate = {};
+    state.entries.forEach(function (e) {
+      if (!byDate[e.date]) byDate[e.date] = [];
+      byDate[e.date].push(e);
+    });
+    var dayCountries = {};
+    Object.keys(byDate).forEach(function (d) { dayCountries[d] = dayCountry(byDate[d]); });
+
+    var totalDays = 0, byCountry = {}, byMonth = [];
+    var monthsHtml = '';
+    for (var m = 0; m < 12; m++) {
+      var daysInMonth = new Date(year, m + 1, 0).getDate();
+      var startWeekday = new Date(year, m, 1).getDay();
+      var monthCount = 0;
+      var cells = '';
+      for (var i = 0; i < startWeekday; i++) cells += '<span class="yr-cell empty"></span>';
+      for (var d = 1; d <= daysInMonth; d++) {
+        var dateObj = new Date(year, m, d);
+        var dStr = dateKey(dateObj);
+        var cc = dayCountries[dStr] || null;
+        var isFuture = dateObj > now;
+        if (cc) { monthCount++; totalDays++; byCountry[cc] = (byCountry[cc] || 0) + 1; }
+        var cls = 'yr-cell' + (isFuture ? ' future' : '') + (dStr === today ? ' today' : '') + (cc ? ' has-entry country-' + cc : '');
+        cells += cc
+          ? '<button type="button" class="' + cls + '" data-date="' + dStr + '" title="' + dStr + ' ' + countryFlag(cc) + '"></button>'
+          : '<span class="' + cls + '"></span>';
+      }
+      byMonth.push(monthCount);
+      monthsHtml += '<div class="yr-month"><div class="yr-month-label"><span>' + (m + 1) + '月</span><b>' + (monthCount || '') + '</b></div>' +
+        '<div class="yr-cells">' + cells + '</div></div>';
+    }
+
+    var codes = Object.keys(byCountry).sort(function (a, b) { return byCountry[b] - byCountry[a]; });
+    var legendHtml = codes.length
+      ? '<div class="cal-legend">' + codes.map(function (c) {
+          return '<span><span class="dot country-' + c + '"></span>' + countryFlag(c) + ' ' + escapeHtml(countryName(c)) + ' <b>' + byCountry[c] + '</b>日</span>';
+        }).join('') + '</div>'
+      : '';
+    var activeMonths = byMonth.filter(function (n) { return n > 0; }).length;
+    var monthsElapsed = year < now.getFullYear() ? 12 : (year > now.getFullYear() ? 0 : now.getMonth() + 1);
+    var avg = monthsElapsed ? Math.round(totalDays / monthsElapsed * 10) / 10 : 0;
+
+    container.innerHTML =
+      '<div class="cal-nav">' +
+        '<button type="button" class="icon-btn yr-prev" aria-label="前の年">‹</button>' +
+        '<span class="cal-month-label">' + year + '年</span>' +
+        '<button type="button" class="icon-btn yr-next" aria-label="次の年"' + (year >= now.getFullYear() ? ' disabled' : '') + '>›</button>' +
+      '</div>' +
+      '<div class="yr-summary">' +
+        '<div class="yr-stat"><div class="n">' + totalDays + '<span>日</span></div><div class="l">年間トレーニング日数</div></div>' +
+        '<div class="yr-stat"><div class="n">' + avg + '<span>日/月</span></div><div class="l">月平均</div></div>' +
+        '<div class="yr-stat"><div class="n">' + activeMonths + '<span>/12</span></div><div class="l">トレーニングした月</div></div>' +
+      '</div>' +
+      '<div class="yr-grid">' + monthsHtml + '</div>' + legendHtml;
+
+    container.querySelector('.yr-prev').addEventListener('click', function () { calendarYear = year - 1; renderYearView(); });
+    var next = container.querySelector('.yr-next');
+    if (next && year < now.getFullYear()) next.addEventListener('click', function () { calendarYear = year + 1; renderYearView(); });
+  }
+  function bindYearClicks(containerEl) {
+    if (!containerEl) return;
+    containerEl.addEventListener('click', function (ev) {
+      var cell = ev.target.closest('.yr-cell[data-date]');
+      if (!cell) return;
+      openDayDetail(cell.dataset.date);
+    });
+  }
+  function applyHistoryRange() {
+    var isYear = state.historyRange === 'year';
+    var cal = $('historyCalendar'), yr = $('historyYear');
+    if (cal) cal.style.display = isYear ? 'none' : 'block';
+    if (yr) yr.style.display = isYear ? 'block' : 'none';
+    var toggle = $('historyRangeToggle');
+    if (toggle) toggle.querySelectorAll('.pill').forEach(function (p) { p.classList.toggle('active', p.dataset.range === state.historyRange); });
+    if (isYear) renderYearView();
+  }
+
   function bindCalendarClicks(containerEl) {
     if (!containerEl) return;
     containerEl.addEventListener('click', function (ev) {
@@ -1827,8 +1951,42 @@
     }
     // まとめカード(KOKI'S LOG)のみ表示。下の一覧は同じ内容の重複だったため削除。
     // 編集はカードの種目を長押しで行える。
+    var cc = dayCountry(dayEntries);
+    var explicit = dayEntries.some(function (e) { return !!e.country; });
+    var pickerPills = COUNTRY_CHOICES.map(function (c) {
+      return '<button type="button" class="pill' + (c === cc ? ' active' : '') + '" data-country="' + c + '">' + countryFlag(c) + ' ' + escapeHtml(countryName(c)) + '</button>';
+    }).join('') + '<button type="button" class="pill ghost" data-country="__other">その他…</button>';
     body.innerHTML =
+      '<div class="dd-country"><span class="cur"><span class="flag">' + countryFlag(cc) + '</span>' + escapeHtml(countryName(cc)) +
+        (explicit ? '' : ' <span style="color:var(--text-faint);font-weight:600;font-size:11px">(自動判定)</span>') + '</span>' +
+        '<button type="button" class="btn btn-outline" id="ddCountryEditBtn">国を変更</button></div>' +
+      '<div class="dd-country-picker" id="ddCountryPicker"><div class="pillrow">' + pickerPills + '</div>' +
+        '<p class="hint">この日の全セット(' + dayEntries.length + '件)の国をまとめて変更します。</p></div>' +
       '<div class="summary-card">' + buildSummaryCardHtml(dateStr, true) + '</div>';
+  }
+
+  // Countries offered in the day-detail picker (others via 2-letter code).
+  var COUNTRY_CHOICES = ['BE', 'JP', 'NL', 'FR', 'DE', 'LU', 'GB', 'ES', 'IT', 'CH', 'AT', 'US'];
+  function setDayCountry(dateStr, code) {
+    code = String(code || '').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code)) { showToast('国コードは英字2文字で入力してください(例: NL)'); return; }
+    var changed = [];
+    state.entries.forEach(function (e) {
+      if (e.date === dateStr && e.country !== code) { e.country = code; changed.push(e); }
+    });
+    if (cloudHooks) {
+      changed.forEach(function (e) { cloudHooks.writeEntry(e); });
+    } else {
+      saveJSON(LS.entries, state.entries);
+    }
+    renderTodayList();
+    renderHistory();
+    renderPrevHint();
+    if (openDayDetailDate === dateStr) {
+      $('dayDetailTitle').textContent = formatDateLabel(dateStr) + ' ' + countryFlag(code);
+      renderDayDetailBody(dateStr);
+    }
+    showToast(formatDateLabel(dateStr) + ' の国を ' + countryFlag(code) + ' ' + countryName(code) + ' に変更しました');
   }
 
   function openDayDetail(dateStr) {
@@ -2550,6 +2708,26 @@
     $('groupEditOverlay').classList.remove('open');
   }
 
+  // Removes every set of the exercise being edited from that day.
+  function deleteGroupEdit() {
+    if (!editingGroup) return;
+    var ids = editingGroup.ids || [];
+    var name = $('groupEditName').value.trim() || '種目';
+    if (!ids.length) { closeGroupEdit(); return; }
+    if (!confirm('「' + name + '」の ' + formatDateLabel(editingGroup.date) + ' の記録(' + ids.length + 'セット)をすべて削除しますか？\nこの操作は取り消せません。')) return;
+    state.entries = state.entries.filter(function (e) { return ids.indexOf(e.id) === -1; });
+    if (cloudHooks) {
+      ids.forEach(function (id) { cloudHooks.deleteEntry(id); });
+    } else {
+      saveJSON(LS.entries, state.entries);
+    }
+    closeGroupEdit();
+    renderTodayList();
+    renderHistory();
+    refreshDayDetailIfOpen();
+    showToast('「' + name + '」を削除しました');
+  }
+
   function saveGroupEdit(ev) {
     if (ev) ev.preventDefault();
     if (!editingGroup) return;
@@ -2656,6 +2834,7 @@
     renderWorkoutSummary();
     renderCountryStats();
     renderCalendar();
+    if (state.historyRange === 'year') renderYearView();
     if (state.historyView === 'graph') {
       renderExercisePills();
       renderHistoryGraph();
@@ -3373,6 +3552,7 @@
   $('closeEditEntryBtn').addEventListener('click', closeEditEntry);
   $('closeGroupEditBtn').addEventListener('click', closeGroupEdit);
   $('groupEditForm').addEventListener('submit', saveGroupEdit);
+  $('groupEditDeleteBtn').addEventListener('click', deleteGroupEdit);
   // add / remove a set inside the group editor
   $('groupEditAddSet').addEventListener('click', function () {
     if (!editingGroup) return;
@@ -3391,6 +3571,22 @@
   bindSummaryLongPress($('workoutSummaryCard'));
   // History → day detail: long-press a summary-card exercise to edit it too
   bindSummaryLongPress($('dayDetailBody'), function () { return openDayDetailDate; });
+  $('dayDetailBody').addEventListener('click', function (ev) {
+    if (ev.target.closest('#ddCountryEditBtn')) {
+      var picker = $('ddCountryPicker');
+      if (picker) picker.classList.toggle('open');
+      return;
+    }
+    var pill = ev.target.closest('#ddCountryPicker .pill');
+    if (!pill || !openDayDetailDate) return;
+    var code = pill.dataset.country;
+    if (code === '__other') {
+      var typed = prompt('国コードを英字2文字で入力してください(例: NL=オランダ, FR=フランス, DE=ドイツ, GB=イギリス, US=アメリカ)');
+      if (typed === null) return;
+      code = typed;
+    }
+    setDayCountry(openDayDetailDate, code);
+  });
 
   // ---------------------------------------------------------------------
   // RM calculator
@@ -3736,6 +3932,14 @@
   bindSetRowSwipe($('dayDetailBody'), deleteEntry, openEditEntry);
   bindCalendarClicks($('trainingCalendar'));
   bindCalendarClicks($('historyCalendar'));
+  bindYearClicks($('historyYear'));
+  var rangeToggle = $('historyRangeToggle');
+  if (rangeToggle) rangeToggle.querySelectorAll('.pill').forEach(function (p) {
+    p.addEventListener('click', function () {
+      state.historyRange = p.dataset.range;
+      applyHistoryRange();
+    });
+  });
 
   // ---------------------------------------------------------------------
   // add custom body-part category
