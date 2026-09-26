@@ -170,8 +170,19 @@
   .detect-hint.detected { color: var(--accent); background: var(--accent-soft); border-style: solid; border-color: transparent; font-weight: 700; }
   .detect-hint strong { font-weight: 800; }
 
-  .prev-hint { font-size: 11.5px; color: var(--text-muted); padding: 2px 2px 0; }
+  .prev-hint { font-size: 11.5px; color: var(--text-muted); padding: 2px 2px 0; line-height: 1.7; }
   .prev-hint strong { color: var(--text); font-variant-numeric: tabular-nums; }
+  .prev-hint .best-tag { color: var(--accent); font-weight: 800; }
+  .country-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .country-badge .flag { font-size: 15px; }
+  .country-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .country-stat { flex: 1 1 120px; display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  .country-stat .flag { font-size: 24px; }
+  .country-stat .cs-name { font-size: 12px; color: var(--text-muted); font-weight: 700; }
+  .country-stat .cs-num { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .country-stat .cs-num span { font-size: 11px; color: var(--text-faint); margin-left: 2px; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); font-weight: 600; }
+  .check-row input { width: 18px; height: 18px; accent-color: var(--accent); }
 
   .btn { appearance: none; border: none; font: inherit; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; cursor: pointer; width: 100%; transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .btn-primary { background: var(--accent-grad); color: var(--accent-ink); box-shadow: 0 10px 24px -10px rgba(34, 211, 238, 0.55); }
@@ -434,6 +445,7 @@
     <div class="screen-header">
       <h2 class="screen-title">今日のトレーニング</h2>
       <p class="screen-desc">種目名を入力すると部位を自動判定します。違っていれば下のピルで手動修正できます。</p>
+      <button type="button" class="country-badge" id="countryBadge" title="タップで位置情報を再取得"><span class="flag">🌍</span><span id="countryBadgeText">場所を確認中…</span></button>
     </div>
 
     <div class="pillrow" id="categoryPills">
@@ -513,6 +525,11 @@
     </div>
 
     <div class="summary-card" id="workoutSummaryCard" style="display:none"></div>
+
+    <div class="card" id="countryStatsCard" style="display:none; margin-top:14px;">
+      <span class="card-label">🌍 国別トレーニング日数</span>
+      <div class="country-stats" id="countryStats"></div>
+    </div>
   </section>
 
   <!-- ===== フィードバック ===== -->
@@ -703,6 +720,20 @@
       <div class="field">
         <label for="birthdateInput">生年月日</label>
         <input type="date" id="birthdateInput">
+      </div>
+      <div class="field">
+        <label for="restTimerModeSelect">休憩タイマー</label>
+        <select id="restTimerModeSelect">
+          <option value="app">アプリ内タイマーのみ</option>
+          <option value="native">端末の純正タイマーも起動する</option>
+        </select>
+        <input type="text" id="shortcutNameInput" placeholder="iPhone用ショートカット名(例: 筋トレタイマー)" autocomplete="off">
+        <p class="settings-hint">iPhone: ショートカットAppで「タイマーを開始」1アクションだけのショートカットを作り、時間に「ショートカットの入力」(単位: 秒)を指定して、その名前を上に入力します。セットを追加するたびに時計Appの純正タイマーが始まり、バックグラウンドでも鳴ります。Android: 時計アプリのタイマーが直接起動します(ショートカット名は不要)。</p>
+      </div>
+      <div class="field">
+        <label>トレーニング場所(国)</label>
+        <label class="check-row"><input type="checkbox" id="trackCountryInput"> 位置情報から国を自動で記録する</label>
+        <p class="settings-hint" id="countryStatusHint">位置情報が使えないときはタイムゾーンから判定します。位置情報の座標は保存されず、国名だけを各セットに記録します。</p>
       </div>
       <div class="field">
         <label for="apiKeyInput">Anthropic APIキー</label>
@@ -945,11 +976,21 @@
   };
   var DEFAULT_MYPAGE = { weight: null, height: null, age: null, frequency: null, goal: null, note: '', name: '', photo: null, monthlyGoal: '' };
 
+  function defaultSettings() {
+    return { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '', restTimerMode: 'app', shortcutName: '', trackCountry: true };
+  }
+  // settings objects loaded from localStorage / Firestore may predate newer
+  // keys, so read through this helper to get a sane default for missing ones.
+  function getSetting(key, def) {
+    var v = state && state.settings ? state.settings[key] : undefined;
+    return (v === undefined || v === null) ? def : v;
+  }
+
   var state = {
     entries: loadJSON(LS.entries, []),
     categories: loadJSON(LS.categories, DEFAULT_CATEGORIES.slice()),
     dict: loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT))),
-    settings: loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' }),
+    settings: loadJSON(LS.settings, defaultSettings()),
     activeCategory: null,
     manualOverride: false,
     detectMode: 'idle', // idle | dict | ai | manual | loading
@@ -1026,9 +1067,178 @@
     return vals.length ? Math.max.apply(null, vals) : null;
   }
   function latestEntryForExercise(name) {
-    var matches = state.entries.filter(function (e) { return e.name === name && e.weight != null; });
+    var matches = state.entries.filter(function (e) { return e.name === name && (e.weight != null || e.minutes != null); });
     if (!matches.length) return null;
-    return matches.reduce(function (latest, e) { return e.ts > latest.ts ? e : latest; }, matches[0]);
+    return matches.reduce(function (latest, e) {
+      if (e.date !== latest.date) return e.date > latest.date ? e : latest;
+      return (e.ts || 0) > (latest.ts || 0) ? e : latest;
+    }, matches[0]);
+  }
+  // All-time best set for an exercise: heaviest weight, then most reps at
+  // that weight, then the earliest date it was first achieved. Cardio: the
+  // longest distance (or longest time when no distance was logged).
+  function bestEntryForExercise(name) {
+    var strength = state.entries.filter(function (e) { return e.name === name && e.weight != null; });
+    if (strength.length) {
+      return strength.reduce(function (best, e) {
+        if (e.weight > best.weight) return e;
+        if (e.weight === best.weight) {
+          if ((e.reps || 0) > (best.reps || 0)) return e;
+          if ((e.reps || 0) === (best.reps || 0) && e.date < best.date) return e;
+        }
+        return best;
+      }, strength[0]);
+    }
+    var cardio = state.entries.filter(function (e) { return e.name === name && e.minutes != null; });
+    if (!cardio.length) return null;
+    var withDist = cardio.filter(function (e) { return e.distance != null; });
+    var pool = withDist.length ? withDist : cardio;
+    var key = withDist.length ? 'distance' : 'minutes';
+    return pool.reduce(function (best, e) {
+      if (e[key] > best[key]) return e;
+      if (e[key] === best[key] && e.date < best.date) return e;
+      return best;
+    }, pool[0]);
+  }
+  function formatSetLabel(e) {
+    if (e.minutes !== undefined) return e.minutes + '分' + (e.distance != null ? ' / ' + e.distance + 'km' : '');
+    return e.weight + 'kg × ' + e.reps + '回';
+  }
+  // Like formatDateLabel but prefixes the year when it isn't the current one.
+  function formatDateLabelWithYear(dateStr) {
+    var y = parseInt(String(dateStr).slice(0, 4), 10);
+    var label = formatDateLabel(dateStr);
+    return (y && y !== new Date().getFullYear()) ? y + '年' + label : label;
+  }
+
+  // ---------------------------------------------------------------------
+  // training location (country)
+  // Each entry stores the ISO country code it was logged in. Entries that
+  // predate this field fall back to the timeline below (Japan until
+  // 2026-09-19, Belgium from 2026-09-20).
+  // ---------------------------------------------------------------------
+  var COUNTRY_TIMELINE = [
+    { until: '2026-09-19', code: 'JP' },
+    { until: null, code: 'BE' }
+  ];
+  var TZ_COUNTRY = {
+    'Asia/Tokyo': 'JP', 'Europe/Brussels': 'BE', 'Europe/Amsterdam': 'NL', 'Europe/Paris': 'FR', 'Europe/Berlin': 'DE',
+    'Europe/London': 'GB', 'Europe/Luxembourg': 'LU', 'Europe/Zurich': 'CH', 'Europe/Madrid': 'ES', 'Europe/Rome': 'IT',
+    'Europe/Vienna': 'AT', 'Europe/Copenhagen': 'DK', 'Europe/Stockholm': 'SE', 'Europe/Oslo': 'NO', 'Europe/Dublin': 'IE',
+    'Europe/Lisbon': 'PT', 'Europe/Prague': 'CZ', 'Europe/Warsaw': 'PL', 'Asia/Seoul': 'KR', 'Asia/Taipei': 'TW',
+    'Asia/Shanghai': 'CN', 'Asia/Hong_Kong': 'HK', 'Asia/Singapore': 'SG', 'Asia/Bangkok': 'TH', 'Australia/Sydney': 'AU',
+    'America/New_York': 'US', 'America/Los_Angeles': 'US', 'America/Chicago': 'US', 'America/Toronto': 'CA', 'Pacific/Honolulu': 'US'
+  };
+  var COUNTRY_NAMES_JA = { JP: '日本', BE: 'ベルギー' };
+  var LS_COUNTRY = 'tetsulog_country';
+  var currentCountry = loadJSON(LS_COUNTRY, null); // { code, name, city, ts, source: 'gps' | 'tz' }
+
+  function fallbackCountryForDate(dateStr) {
+    for (var i = 0; i < COUNTRY_TIMELINE.length; i++) {
+      var t = COUNTRY_TIMELINE[i];
+      if (!t.until || dateStr <= t.until) return t.code;
+    }
+    return COUNTRY_TIMELINE[COUNTRY_TIMELINE.length - 1].code;
+  }
+  function entryCountry(e) {
+    return e.country || fallbackCountryForDate(e.date);
+  }
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '🌍';
+    var cps = code.toUpperCase().split('').map(function (c) { return 0x1F1E6 + c.charCodeAt(0) - 65; });
+    return String.fromCodePoint(cps[0], cps[1]);
+  }
+  function countryName(code) {
+    if (!code) return '不明';
+    if (COUNTRY_NAMES_JA[code]) return COUNTRY_NAMES_JA[code];
+    try { return new Intl.DisplayNames(['ja'], { type: 'region' }).of(code) || code; } catch (e) { return code; }
+  }
+  function countryFromTimezone() {
+    try {
+      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      return TZ_COUNTRY[tz] || null;
+    } catch (e) { return null; }
+  }
+  // Country code used for entries logged right now.
+  function currentCountryCode() {
+    if (currentCountry && currentCountry.code) return currentCountry.code;
+    return countryFromTimezone() || fallbackCountryForDate(todayStr());
+  }
+  // Most common country among a day's entries.
+  function dayCountry(dayEntries) {
+    var counts = {};
+    dayEntries.forEach(function (e) { var c = entryCountry(e); counts[c] = (counts[c] || 0) + 1; });
+    var best = null;
+    Object.keys(counts).forEach(function (c) { if (!best || counts[c] > counts[best]) best = c; });
+    return best;
+  }
+  function setCountry(code, name, city, source) {
+    currentCountry = { code: code, name: name || countryName(code), city: city || '', ts: Date.now(), source: source };
+    saveJSON(LS_COUNTRY, currentCountry);
+    renderCountryBadge();
+  }
+  function setTzCountry() {
+    var code = countryFromTimezone();
+    if (code) setCountry(code, null, '', 'tz');
+    else renderCountryBadge();
+  }
+  var countryDetecting = false;
+  function detectCountry(force) {
+    if (!getSetting('trackCountry', true)) { renderCountryBadge(); return; }
+    if (!navigator.geolocation) { setTzCountry(); return; }
+    if (!force && currentCountry && currentCountry.source === 'gps' && Date.now() - currentCountry.ts < 6 * 3600000) { renderCountryBadge(); return; }
+    if (countryDetecting) return;
+    countryDetecting = true;
+    renderCountryBadge(true);
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lon + '&localityLanguage=ja')
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          countryDetecting = false;
+          if (j && j.countryCode) setCountry(j.countryCode, j.countryName, j.city || j.locality || '', 'gps');
+          else setTzCountry();
+        })
+        .catch(function () { countryDetecting = false; setTzCountry(); });
+    }, function () {
+      countryDetecting = false;
+      setTzCountry();
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 3600000 });
+  }
+  function renderCountryBadge(loading) {
+    var badge = $('countryBadge');
+    var text = $('countryBadgeText');
+    if (!badge || !text) return;
+    if (!getSetting('trackCountry', true)) {
+      var fb = countryFromTimezone() || fallbackCountryForDate(todayStr());
+      badge.querySelector('.flag').textContent = countryFlag(fb);
+      text.textContent = countryName(fb) + '(位置情報オフ)';
+      return;
+    }
+    if (loading) { badge.querySelector('.flag').textContent = '📡'; text.textContent = '場所を確認中…'; return; }
+    var code = currentCountryCode();
+    badge.querySelector('.flag').textContent = countryFlag(code);
+    var src = currentCountry && currentCountry.source === 'gps' ? (currentCountry.city ? ' ・ ' + currentCountry.city : '') : ' (タイムゾーン判定)';
+    text.textContent = countryName(code) + 'で記録中' + src;
+  }
+  function renderCountryStats() {
+    var card = $('countryStatsCard');
+    var box = $('countryStats');
+    if (!card || !box) return;
+    var days = {};
+    state.entries.forEach(function (e) {
+      var c = entryCountry(e);
+      if (!days[c]) days[c] = {};
+      days[c][e.date] = true;
+    });
+    var codes = Object.keys(days);
+    if (!codes.length) { card.style.display = 'none'; return; }
+    codes.sort(function (a, b) { return Object.keys(days[b]).length - Object.keys(days[a]).length; });
+    box.innerHTML = codes.map(function (c) {
+      return '<div class="country-stat"><span class="flag">' + countryFlag(c) + '</span><div><div class="cs-name">' + escapeHtml(countryName(c)) + '</div>' +
+        '<div class="cs-num">' + Object.keys(days[c]).length + '<span>日</span></div></div></div>';
+    }).join('');
+    card.style.display = 'block';
   }
   function formatDateLabel(dateStr) {
     var d = new Date(dateStr + 'T00:00:00');
@@ -1201,11 +1411,15 @@
     var name = $('exerciseName').value.trim();
     var latest = name ? latestEntryForExercise(name) : null;
     if (!latest) { hint.style.display = 'none'; return; }
-    var isCardio = latest.minutes !== undefined;
-    var text = isCardio
-      ? (latest.minutes + '分' + (latest.distance != null ? ' / ' + latest.distance + 'km' : ''))
-      : (latest.weight + 'kg × ' + latest.reps + '回');
-    hint.innerHTML = '前回: <strong>' + escapeHtml(text) + '</strong>(' + formatDateLabel(latest.date) + ')';
+    var best = bestEntryForExercise(name);
+    var when = function (e) { return '(' + formatDateLabelWithYear(e.date) + ' ' + countryFlag(entryCountry(e)) + ')'; };
+    var html = '前回: <strong>' + escapeHtml(formatSetLabel(latest)) + '</strong> ' + when(latest);
+    if (best && best.id === latest.id) {
+      html += ' <span class="best-tag">🏆 最高記録</span>';
+    } else if (best) {
+      html += '<br>最高: <strong>' + escapeHtml(formatSetLabel(best)) + '</strong> ' + when(best) + ' <span class="best-tag">🏆</span>';
+    }
+    hint.innerHTML = html;
     hint.style.display = 'block';
   }
 
@@ -1583,7 +1797,8 @@
 
   function openDayDetail(dateStr) {
     openDayDetailDate = dateStr;
-    $('dayDetailTitle').textContent = formatDateLabel(dateStr);
+    var ddEntries = state.entries.filter(function (e) { return e.date === dateStr; });
+    $('dayDetailTitle').textContent = formatDateLabel(dateStr) + (ddEntries.length ? ' ' + countryFlag(dayCountry(ddEntries)) : '');
     renderDayDetailBody(dateStr);
     $('dayDetailOverlay').classList.add('open');
   }
@@ -1642,7 +1857,7 @@
       state.activeCategory = category;
 
       var isCardio = category === '有酸素';
-      var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: state.selectedDate, category: category, name: nameVal, ts: Date.now() };
+      var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7), date: state.selectedDate, category: category, name: nameVal, ts: Date.now(), country: currentCountryCode() };
 
       if (isCardio) {
         var minutes = parseFloat($('inputMinutes').value);
@@ -1749,6 +1964,34 @@
     $('restTimerTime').textContent = formatMMSS(seconds);
     clearInterval(restTimerInterval);
     restTimerInterval = setInterval(tickRestTimer, 250);
+    launchNativeTimer(seconds);
+  }
+  function isStandaloneApp() {
+    try { return navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches; } catch (e) { return false; }
+  }
+  // Hands the countdown to the OS timer as well, so it rings even when the
+  // phone is locked or this app is in the background.
+  //  - Android: Clock app via the SET_TIMER intent (no setup needed).
+  //  - iPhone/iPad/Mac: there is no public URL scheme for the Clock app, so a
+  //    one-action Shortcut (「タイマーを開始」 with 「ショートカットの入力」 as
+  //    the seconds) is launched by name via shortcuts://.
+  function launchNativeTimer(seconds) {
+    if (getSetting('restTimerMode', 'app') !== 'native') return;
+    var ua = navigator.userAgent || '';
+    var url = null;
+    if (/android/i.test(ua)) {
+      url = 'intent://#Intent;action=android.intent.action.SET_TIMER;i.android.intent.extra.alarm.LENGTH=' + seconds +
+        ';S.android.intent.extra.alarm.MESSAGE=' + encodeURIComponent('休憩') + ';B.android.intent.extra.alarm.SKIP_UI=true;end';
+    } else if (/iPhone|iPad|iPod|Macintosh/.test(ua)) {
+      var name = String(getSetting('shortcutName', '') || '').trim();
+      if (!name) { showToast('設定で純正タイマー用のショートカット名を入力してください'); return; }
+      url = 'shortcuts://x-callback-url/run-shortcut?name=' + encodeURIComponent(name) + '&input=text&text=' + seconds;
+      // In Safari, come back to this tab when the shortcut finishes. From the
+      // home-screen app a URL callback would open Safari instead, so skip it.
+      if (!isStandaloneApp()) url += '&x-success=' + encodeURIComponent(location.href.split('#')[0]);
+    }
+    if (!url) { showToast('この端末では純正タイマーを起動できません'); return; }
+    try { window.location.href = url; } catch (e) { console.warn('[鉄ログ] native timer launch failed', e); }
   }
   function tickRestTimer() {
     var remaining = Math.round((restEndAt - Date.now()) / 1000);
@@ -2177,7 +2420,7 @@
 
     return captionHtml +
       '<div class="sc-top">' +
-        '<div><div class="sc-brand">KOKI\'S LOG</div><div class="sc-date">' + formatSummaryDate(day) + durationHtml + '</div></div>' +
+        '<div><div class="sc-brand">KOKI\'S LOG</div><div class="sc-date">' + formatSummaryDate(day) + ' ' + countryFlag(dayCountry(dayEntries)) + ' ' + escapeHtml(countryName(dayCountry(dayEntries))) + durationHtml + '</div></div>' +
         '<div class="sc-ring">' + ringSvg + '</div>' +
       '</div>' +
       '<div class="sc-stats">' +
@@ -2375,6 +2618,7 @@
     renderMonthStats();
     renderLoadCompare();
     renderWorkoutSummary();
+    renderCountryStats();
     renderCalendar();
     if (state.historyView === 'graph') {
       renderExercisePills();
@@ -2402,7 +2646,7 @@
 
       var cats = Array.from(new Set(dayEntries.map(function (e) { return e.category; })));
       var dayGroups = groupEntriesByName(dayEntries);
-      html += '<div class="day-group"><div class="day-header"><div><span class="date">' + formatDateLabel(date) + '</span>' +
+      html += '<div class="day-group"><div class="day-header"><div><span class="date">' + formatDateLabel(date) + ' ' + countryFlag(dayCountry(dayEntries)) + '</span>' +
         cats.map(function (c) { return '<span class="part-tag">' + escapeHtml(c) + '</span>'; }).join('') +
         '</div><span class="volume">' + (volParts.join(' ・ ') || '—') + '</span></div>' +
         '<div class="log-list">' + dayGroups.map(function (g) { return exerciseGroupHtml(g, { defaultExpanded: false, compareDate: date }); }).join('') + '</div></div>';
@@ -3067,6 +3311,18 @@
     $('modelSelect').value = state.settings.model;
     $('feedbackInstructionsInput').value = state.settings.feedbackInstructions || '';
     $('birthdateInput').value = state.settings.birthdate || '';
+    $('restTimerModeSelect').value = getSetting('restTimerMode', 'app');
+    $('shortcutNameInput').value = getSetting('shortcutName', '');
+    $('trackCountryInput').checked = !!getSetting('trackCountry', true);
+    var cs = $('countryStatusHint');
+    if (cs) {
+      var base = '位置情報が使えないときはタイムゾーンから判定します。位置情報の座標は保存されず、国名だけを各セットに記録します。';
+      if (currentCountry && currentCountry.code) {
+        base = '現在の判定: ' + countryFlag(currentCountry.code) + ' ' + countryName(currentCountry.code) +
+          (currentCountry.city ? ' ・ ' + currentCountry.city : '') + (currentCountry.source === 'gps' ? '(位置情報)' : '(タイムゾーン)') + '。' + base;
+      }
+      cs.textContent = base;
+    }
     $('settingsOverlay').classList.add('open');
   }
   function closeSettings() { $('settingsOverlay').classList.remove('open'); }
@@ -3351,11 +3607,21 @@
     input.type = input.type === 'password' ? 'text' : 'password';
   });
   $('saveSettingsBtn').addEventListener('click', function () {
-    state.settings = { apiKey: $('apiKeyInput').value.trim(), model: $('modelSelect').value, feedbackInstructions: $('feedbackInstructionsInput').value.trim(), birthdate: $('birthdateInput').value };
+    var wasTracking = !!getSetting('trackCountry', true);
+    state.settings = {
+      apiKey: $('apiKeyInput').value.trim(),
+      model: $('modelSelect').value,
+      feedbackInstructions: $('feedbackInstructionsInput').value.trim(),
+      birthdate: $('birthdateInput').value,
+      restTimerMode: $('restTimerModeSelect').value,
+      shortcutName: $('shortcutNameInput').value.trim(),
+      trackCountry: $('trackCountryInput').checked
+    };
     saveJSON(LS.settings, state.settings);
     if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
     showToast('設定を保存しました');
+    if (state.settings.trackCountry && !wasTracking) detectCountry(true); else renderCountryBadge();
   });
 
   // ---------------------------------------------------------------------
@@ -3476,7 +3742,7 @@
     state.entries = loadJSON(LS.entries, []);
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
-    state.settings = loadJSON(LS.settings, { apiKey: '', model: 'claude-opus-4-8', feedbackInstructions: '', birthdate: '' });
+    state.settings = loadJSON(LS.settings, defaultSettings());
     state.feedbackHistory = loadFeedbackHistory();
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.dailyNotes = loadJSON(LS.dailyNotes, {});
@@ -3507,8 +3773,19 @@
     renderFeedback();
     renderMyPage();
     initInbodyView();
+    renderCountryBadge();
+    detectCountry(false);
   }
   init();
+
+  var countryBadgeEl = $('countryBadge');
+  if (countryBadgeEl) countryBadgeEl.addEventListener('click', function () {
+    if (!getSetting('trackCountry', true)) { showToast('設定で「位置情報から国を自動で記録する」をオンにしてください'); return; }
+    detectCountry(true);
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') detectCountry(false);
+  });
 
   // ---------------------------------------------------------------------
   // integration surface for the Firebase (Google login / cloud sync) module.
