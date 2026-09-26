@@ -302,6 +302,17 @@
   .cal-cell.has-entry { background: var(--accent-soft); }
   .cal-daynum { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .cal-check { font-size: 9px; color: var(--accent); font-weight: 800; line-height: 1; }
+  /* training-day cells are tinted per country so a month at a glance shows where you trained */
+  .cal-cell.has-entry.country-JP { background: rgba(248, 113, 113, 0.16); }
+  .cal-cell.has-entry.country-JP .cal-daynum { color: #F87171; }
+  .cal-cell.has-entry.country-BE { background: rgba(251, 191, 36, 0.16); }
+  .cal-cell.has-entry.country-BE .cal-daynum { color: #FBBF24; }
+  .cal-flag { font-size: 10px; line-height: 1; }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); font-weight: 700; }
+  .cal-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--accent); }
+  .cal-legend .dot.country-JP { background: rgba(248, 113, 113, 0.8); }
+  .cal-legend .dot.country-BE { background: rgba(251, 191, 36, 0.8); }
+  .cal-legend b { color: var(--text); font-variant-numeric: tabular-nums; }
 
   .pr-badge { font-size: 10.5px; margin-right: 2px; }
   .chart-btn {
@@ -1724,7 +1735,15 @@
     if (!calendarMonth) calendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     var counts = {};
-    state.entries.forEach(function (e) { counts[e.date] = (counts[e.date] || 0) + 1; });
+    var byDate = {};
+    state.entries.forEach(function (e) {
+      counts[e.date] = (counts[e.date] || 0) + 1;
+      if (!byDate[e.date]) byDate[e.date] = [];
+      byDate[e.date].push(e);
+    });
+    // country each training day belongs to (most common country among its sets)
+    var dayCountries = {};
+    Object.keys(byDate).forEach(function (d) { dayCountries[d] = dayCountry(byDate[d]); });
 
     var year = calendarMonth.getFullYear();
     var month = calendarMonth.getMonth();
@@ -1740,12 +1759,29 @@
       var dStr = dateKey(dateObj);
       var isFuture = dateObj > now;
       var hasEntry = !!counts[dStr];
-      var cls = 'cal-cell' + (isFuture ? ' future' : '') + (dStr === today ? ' today' : '') + (hasEntry ? ' has-entry' : '');
+      var cc = hasEntry ? dayCountries[dStr] : null;
+      var cls = 'cal-cell' + (isFuture ? ' future' : '') + (dStr === today ? ' today' : '') + (hasEntry ? ' has-entry' : '') + (cc ? ' country-' + cc : '');
       cellsHtml += '<button type="button" class="' + cls + '"' + (isFuture ? ' disabled' : ' data-date="' + dStr + '"') + '>' +
         '<span class="cal-daynum">' + d + '</span>' +
-        (hasEntry ? '<span class="cal-check">✓</span>' : '') +
+        (hasEntry ? '<span class="cal-flag">' + countryFlag(cc) + '</span>' : '') +
         '</button>';
     }
+
+    // legend: training days per country this month (and all time)
+    var monthPrefix = year + '-' + String(month + 1).padStart(2, '0') + '-';
+    var monthByCountry = {}, totalByCountry = {};
+    Object.keys(dayCountries).forEach(function (d) {
+      var c = dayCountries[d];
+      totalByCountry[c] = (totalByCountry[c] || 0) + 1;
+      if (d.indexOf(monthPrefix) === 0) monthByCountry[c] = (monthByCountry[c] || 0) + 1;
+    });
+    var legendCodes = Object.keys(totalByCountry).sort(function (a, b) { return totalByCountry[b] - totalByCountry[a]; });
+    var legendHtml = legendCodes.length
+      ? '<div class="cal-legend">' + legendCodes.map(function (c) {
+          return '<span><span class="dot country-' + c + '"></span>' + countryFlag(c) + ' ' + escapeHtml(countryName(c)) +
+            ' <b>' + (monthByCountry[c] || 0) + '</b>日<span style="color:var(--text-faint)">(通算 ' + totalByCountry[c] + '日)</span></span>';
+        }).join('') + '</div>'
+      : '';
 
     var html =
       '<div class="cal-nav">' +
@@ -1754,7 +1790,7 @@
         '<button type="button" class="icon-btn cal-next" aria-label="次の月"' + (isCurrentMonth ? ' disabled' : '') + '>›</button>' +
       '</div>' +
       '<div class="cal-weekdays">' + ['日', '月', '火', '水', '木', '金', '土'].map(function (w) { return '<span>' + w + '</span>'; }).join('') + '</div>' +
-      '<div class="cal-grid">' + cellsHtml + '</div>';
+      '<div class="cal-grid">' + cellsHtml + '</div>' + legendHtml;
 
     ['trainingCalendar', 'historyCalendar'].forEach(function (id) {
       var container = $(id);
