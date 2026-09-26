@@ -354,6 +354,11 @@
   .trend-row.best .v { color: #FBBF24; }
   .trend-more { margin-top: 10px; font-size: 12.5px; padding: 9px; }
   .chart-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  /* "new version available" banner (GitHub Pages caches the page for 10 min) */
+  .update-banner { position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 60; display: none; align-items: center; justify-content: space-between; gap: 10px; background: var(--accent); color: var(--accent-ink); border-radius: 14px; padding: 12px 14px; font-size: 13px; font-weight: 800; box-shadow: var(--shadow); cursor: pointer; }
+  .update-banner.show { display: flex; }
+  .update-banner span.sub { font-size: 11px; font-weight: 600; opacity: 0.85; display: block; margin-top: 2px; }
+  .version-line { font-size: 11.5px; color: var(--text-faint); margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
   /* day detail: where this day's training happened, editable */
   .dd-country { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; }
   .dd-country .cur { font-size: 13.5px; font-weight: 800; }
@@ -766,6 +771,11 @@
   </div>
 
   <!-- ===== 設定 ===== -->
+  <div class="update-banner" id="updateBanner" role="button">
+    <div>🆕 新しいバージョンがあります<span class="sub">タップして更新(記録は消えません)</span></div>
+    <div>↻</div>
+  </div>
+
   <div class="settings-overlay" id="settingsOverlay">
     <div class="settings-header">
       <button class="icon-btn" id="closeSettingsBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
@@ -829,6 +839,12 @@
         <label>データ</label>
         <button type="button" class="btn btn-outline" id="openImportBtn">📥 過去の記録をインポート</button>
         <p class="settings-hint">LINEの自分宛メッセージなど、過去に記録したテキストをAIが解析して取り込みます。</p>
+      </div>
+      <div class="field">
+        <label>アプリ情報</label>
+        <p class="version-line" id="versionLine"></p>
+        <button type="button" class="btn btn-outline" id="reloadLatestBtn">↻ 最新版を読み込む</button>
+        <p class="settings-hint">公開サーバーは約10分間ページをキャッシュするため、更新直後は前の版が表示されることがあります。新しい版が見つかると画面下にお知らせが出ます。</p>
       </div>
     </div>
   </div>
@@ -3759,6 +3775,8 @@
     $('modelSelect').value = state.settings.model;
     $('feedbackInstructionsInput').value = state.settings.feedbackInstructions || '';
     $('birthdateInput').value = state.settings.birthdate || '';
+    var vl = $('versionLine');
+    if (vl) vl.textContent = '読み込んだ版: ' + formatVersionDate(loadedVersionDate()) + (updateAvailable ? '(新しい版があります)' : '');
     $('restTimerModeSelect').value = getSetting('restTimerMode', 'app');
     $('shortcutNameInput').value = getSetting('shortcutName', '');
     $('trackCountryInput').checked = !!getSetting('trackCountry', true);
@@ -4239,6 +4257,48 @@
     initInbodyView();
   }
 
+  // ---------------------------------------------------------------------
+  // update check — compares the served page's Last-Modified with the one
+  // this document was loaded from; a newer one means a fresh deploy exists.
+  // ---------------------------------------------------------------------
+  var lastUpdateCheck = 0;
+  var updateAvailable = false;
+  function loadedVersionDate() {
+    var d = new Date(document.lastModified);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function formatVersionDate(d) {
+    if (!d) return '不明';
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function reloadLatest() {
+    var base = location.href.split('?')[0].split('#')[0];
+    try { location.replace(base + '?v=' + Date.now()); } catch (e) { location.reload(); }
+  }
+  function checkForUpdate(force) {
+    if (!window.fetch || location.protocol === 'file:') return;
+    if (!force && Date.now() - lastUpdateCheck < 5 * 60000) return;
+    lastUpdateCheck = Date.now();
+    var loaded = loadedVersionDate();
+    if (!loaded) return;
+    fetch(location.href.split('#')[0], { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+      var lm = r.headers.get('last-modified');
+      if (!lm) return;
+      var served = new Date(lm);
+      if (isNaN(served.getTime())) return;
+      if (served.getTime() - loaded.getTime() > 60000) {
+        updateAvailable = true;
+        var banner = $('updateBanner');
+        if (banner) banner.classList.add('show');
+      }
+    }).catch(function () {});
+  }
+  var updateBannerEl = $('updateBanner');
+  if (updateBannerEl) updateBannerEl.addEventListener('click', reloadLatest);
+  var reloadLatestBtn = $('reloadLatestBtn');
+  if (reloadLatestBtn) reloadLatestBtn.addEventListener('click', reloadLatest);
+
   function init() {
     repairEntryDates();
     initDateInputs();
@@ -4252,6 +4312,7 @@
     initInbodyView();
     renderCountryBadge();
     detectCountry(false);
+    setTimeout(function () { checkForUpdate(true); }, 2500);
   }
   init();
 
@@ -4261,7 +4322,7 @@
     detectCountry(true);
   });
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') detectCountry(false);
+    if (document.visibilityState === 'visible') { detectCountry(false); checkForUpdate(false); }
   });
 
   // ---------------------------------------------------------------------
