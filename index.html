@@ -333,6 +333,27 @@
   .history-range { display: flex; gap: 8px; margin-bottom: 12px; }
   .history-range .pill { flex: 1; text-align: center; justify-content: center; }
   .btn-danger { color: #F87171; border-color: rgba(248, 113, 113, 0.45); }
+  /* exercise trend card (record screen, shown once a known exercise is typed) */
+  .exercise-trend { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--surface-2); }
+  .trend-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .trend-icon { width: 46px; height: 62px; flex-shrink: 0; }
+  .trend-icon svg { display: block; }
+  .trend-title { font-size: 13px; font-weight: 800; }
+  .trend-muscles { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-top: 3px; }
+  .trend-muscles .m { color: #F87171; font-weight: 800; }
+  .trend-muscles .s { color: #60A5FA; font-weight: 700; }
+  .trend-legend { display: flex; gap: 12px; font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
+  .trend-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .trend-caption { font-size: 10.5px; color: var(--text-faint); text-align: center; margin: 4px 0 8px; }
+  .trend-list { display: flex; flex-direction: column; gap: 4px; }
+  .trend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; padding: 5px 8px; border-radius: 8px; background: var(--surface); }
+  .trend-row .d { color: var(--text-muted); font-weight: 700; white-space: nowrap; }
+  .trend-row .v { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .trend-row .e { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .trend-row.best { background: rgba(251, 191, 36, 0.12); }
+  .trend-row.best .v { color: #FBBF24; }
+  .trend-more { margin-top: 10px; font-size: 12.5px; padding: 9px; }
+  .chart-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   /* day detail: where this day's training happened, editable */
   .dd-country { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; }
   .dd-country .cur { font-size: 13.5px; font-weight: 800; }
@@ -450,7 +471,7 @@
   .sc-stat.cal .sc-stat-num { color: #2FD68A; }
   .sc-ex-list { margin-top: 10px; }
   .sc-ex { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid #1D1D22; }
-  .sc-ex-icon { width: 40px; height: 40px; flex-shrink: 0; }
+  .sc-ex-icon { width: 46px; height: 62px; flex-shrink: 0; }
   .sc-ex-icon svg { display: block; }
   .sc-ex-info { min-width: 0; flex: 1; }
   .sc-ex-name { font-size: 15px; font-weight: 700; color: #F4F4F6; }
@@ -516,6 +537,7 @@
         </div>
 
         <div class="prev-hint" id="prevHint" style="display:none"></div>
+        <div class="exercise-trend" id="exerciseTrend" style="display:none"></div>
         <div class="detect-hint" id="detectHint">種目名を入力すると部位を自動判定します</div>
       </div>
       <div style="height:12px"></div>
@@ -1152,6 +1174,103 @@
     if (e.minutes !== undefined) return e.minutes + '分' + (e.distance != null ? ' / ' + e.distance + 'km' : '');
     return e.weight + 'kg × ' + e.reps + '回';
   }
+  // Per-day best set for an exercise, oldest first. Strength days carry the
+  // heaviest set (ties → more reps); cardio days the longest distance (or
+  // time when no distance was logged).
+  function dailyMaxSeries(name) {
+    var byDate = {};
+    state.entries.forEach(function (e) {
+      if (e.name !== name) return;
+      var cur = byDate[e.date];
+      if (e.weight != null) {
+        if (!cur || e.weight > cur.weight || (e.weight === cur.weight && (e.reps || 0) > (cur.reps || 0))) byDate[e.date] = e;
+      } else if (e.minutes != null) {
+        if (!cur) { byDate[e.date] = e; return; }
+        var ed = e.distance != null ? e.distance : -1, cd = cur.distance != null ? cur.distance : -1;
+        if (ed > cd || (ed === cd && e.minutes > cur.minutes)) byDate[e.date] = e;
+      }
+    });
+    return Object.keys(byDate).sort().map(function (d) {
+      var e = byDate[d];
+      var isCardio = e.minutes !== undefined;
+      var value = isCardio ? (e.distance != null ? e.distance : e.minutes) : e.weight;
+      return { date: d, entry: e, value: value, isCardio: isCardio, unit: isCardio ? (e.distance != null ? 'km' : '分') : 'kg' };
+    });
+  }
+  function shortMD(dateStr) {
+    var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? (parseInt(m[2], 10) + '/' + parseInt(m[3], 10)) : dateStr;
+  }
+  // Line chart of a dailyMaxSeries. opts: { height, labels: 'all'|'few' }
+  function buildTrendChartSvg(series, opts) {
+    opts = opts || {};
+    if (!series || series.length < 2) return null;
+    var values = series.map(function (p) { return p.value; });
+    var max = Math.max.apply(null, values), min = Math.min.apply(null, values);
+    var range = (max - min) || (max || 1) * 0.2;
+    var w = 320, h = opts.height || 150, padL = 12, padR = 12, padT = 18, padB = 18;
+    var stepX = (w - padL - padR) / (series.length - 1);
+    var pts = values.map(function (v, i) {
+      return [padL + i * stepX, h - padB - ((v - min) / range) * (h - padT - padB)];
+    });
+    var bestIdx = values.indexOf(max);
+    var pathD = pts.map(function (p, i) { return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    var areaD = pathD + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + (h - padB) + ' L' + pts[0][0].toFixed(1) + ',' + (h - padB) + ' Z';
+    var showAll = opts.labels === 'all' || series.length <= 8;
+    var marks = pts.map(function (p, i) {
+      var isBest = i === bestIdx, isLast = i === pts.length - 1;
+      var out = '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (isBest ? 4.5 : (isLast ? 3.5 : 2.5)) + '" fill="' + (isBest ? '#FBBF24' : 'var(--accent)') + '"/>';
+      if (showAll || isBest || isLast || i === 0) {
+        out += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] - 7).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + (isBest ? '#FBBF24' : 'var(--text-muted)') + '">' + values[i] + '</text>';
+      }
+      return out;
+    }).join('');
+    var xLabels = '';
+    var labelIdx = series.length <= 6 ? series.map(function (_, i) { return i; }) : [0, Math.floor((series.length - 1) / 2), series.length - 1];
+    labelIdx.forEach(function (i) {
+      var anchor = i === 0 ? 'start' : (i === series.length - 1 ? 'end' : 'middle');
+      xLabels += '<text x="' + pts[i][0].toFixed(1) + '" y="' + (h - 4) + '" text-anchor="' + anchor + '" font-size="9" fill="var(--text-faint)">' + shortMD(series[i].date) + '</text>';
+    });
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; display:block;">' +
+      '<path d="' + areaD + '" fill="var(--accent-soft)" stroke="none"/>' +
+      '<path d="' + pathD + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      marks + xLabels + '</svg>';
+  }
+  function trendRowsHtml(series, limit) {
+    if (!series.length) return '';
+    var bestVal = Math.max.apply(null, series.map(function (p) { return p.value; }));
+    var rows = series.slice().reverse();
+    if (limit) rows = rows.slice(0, limit);
+    return rows.map(function (p) {
+      var e = p.entry;
+      var isBest = p.value === bestVal;
+      var extra = p.isCardio
+        ? (e.distance != null ? e.minutes + '分' : '')
+        : 'e1RM ' + Math.round(estimate1RM(e.weight, e.reps)) + 'kg';
+      return '<div class="trend-row' + (isBest ? ' best' : '') + '"><span class="d">' + shortMD(p.date) + ' ' + countryFlag(entryCountry(e)) + '</span>' +
+        '<span class="v">' + escapeHtml(formatSetLabel(e)) + (isBest ? ' 🏆' : '') + '</span><span class="e">' + extra + '</span></div>';
+    }).join('');
+  }
+  function renderExerciseTrend() {
+    var box = $('exerciseTrend');
+    if (!box) return;
+    var name = $('exerciseName').value.trim();
+    var series = name ? dailyMaxSeries(name) : [];
+    if (!series.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    var cat = state.activeCategory || detectFromDict(name) || '';
+    var mus = musclesForExercise(name, cat);
+    var recent = series.slice(-10);
+    var svg = buildTrendChartSvg(recent, { height: 120 });
+    var unitLabel = series[0].isCardio ? (series[0].unit === 'km' ? '距離(km)' : '時間(分)') : '最大重量(kg)';
+    box.innerHTML =
+      '<div class="trend-head"><div class="trend-icon">' + exerciseIconSvg(name, cat) + '</div><div>' +
+        '<div class="trend-title">' + escapeHtml(name) + ' の成長</div>' + muscleTextHtml(mus) + '</div></div>' +
+      (svg ? svg + '<div class="trend-caption">直近' + recent.length + '日の' + unitLabel + '</div>' : '<div class="trend-caption">グラフは2日以上の記録で表示されます</div>') +
+      '<div class="trend-list">' + trendRowsHtml(series, 5) + '</div>' +
+      (series.length > 5 || series.length > recent.length ? '<button type="button" class="btn btn-outline trend-more" data-exercise="' + escapeHtml(name) + '">全期間(' + series.length + '日)の記録とグラフを見る →</button>' : '');
+    box.style.display = 'block';
+  }
+
   // Like formatDateLabel but prefixes the year when it isn't the current one.
   function formatDateLabelWithYear(dateStr) {
     var y = parseInt(String(dateStr).slice(0, 4), 10);
@@ -1458,6 +1577,7 @@
     var hint = $('prevHint');
     var name = $('exerciseName').value.trim();
     var latest = name ? latestEntryForExercise(name) : null;
+    renderExerciseTrend();
     if (!latest) { hint.style.display = 'none'; return; }
     var best = bestEntryForExercise(name);
     var when = function (e) { return '(' + formatDateLabelWithYear(e.date) + ' ' + countryFlag(entryCountry(e)) + ')'; };
@@ -1743,20 +1863,26 @@
 
   function openChart(name) {
     $('chartTitle').textContent = name;
-    var entries = state.entries.filter(function (e) { return e.name === name && e.weight != null; });
-    var best = allTimeBestWeight(name);
-    var sessionCount = new Set(entries.map(function (e) { return e.date; })).size;
-    var svg = buildWeightChartSvg(name);
+    var entries = state.entries.filter(function (e) { return e.name === name; });
+    var series = dailyMaxSeries(name);
+    var best = bestEntryForExercise(name);
+    var cat = entries.length ? entries[0].category : '';
+    var mus = musclesForExercise(name, cat);
+    var svg = buildTrendChartSvg(series, { height: 170, labels: series.length <= 12 ? 'all' : 'few' });
+    var unitLabel = series.length && series[0].isCardio ? (series[0].unit === 'km' ? '距離(km)' : '時間(分)') : '最大重量(kg)';
     var body = $('chartBody');
     body.innerHTML =
+      '<div class="chart-head"><div class="trend-icon">' + exerciseIconSvg(name, cat) + '</div><div>' + muscleTextHtml(mus) + '</div></div>' +
       '<div class="chart-summary">' +
-        '<div><div class="num">' + (best != null ? best : '—') + '<span style="font-size:12px;">kg</span></div><div class="lbl">自己ベスト</div></div>' +
-        '<div><div class="num">' + sessionCount + '</div><div class="lbl">トレーニング日数</div></div>' +
+        '<div><div class="num">' + (best ? escapeHtml(formatSetLabel(best)) : '—') + '</div><div class="lbl">自己ベスト' + (best ? ' ・ ' + formatDateLabelWithYear(best.date) : '') + '</div></div>' +
+        '<div><div class="num">' + series.length + '</div><div class="lbl">トレーニング日数</div></div>' +
         '<div><div class="num">' + entries.length + '</div><div class="lbl">総セット数</div></div>' +
       '</div>' +
       (svg
-        ? '<div class="card">' + svg + '</div><p class="chart-caption">日ごとの最大重量の推移(kg)</p>'
-        : '<p class="empty-note">グラフを表示するには2日以上のデータが必要です。</p>');
+        ? '<div class="card">' + svg + '</div><p class="chart-caption">日ごとの' + unitLabel + 'の推移 ・ 🟡 = 自己ベスト</p>'
+        : '<p class="empty-note">グラフを表示するには2日以上のデータが必要です。</p>') +
+      '<div class="section-heading" style="margin-top:14px"><h3>日ごとのマックス</h3></div>' +
+      '<div class="trend-list" style="margin-top:8px">' + trendRowsHtml(series, 0) + '</div>';
     $('chartOverlay').classList.add('open');
   }
 
@@ -2465,6 +2591,113 @@
     if (idx < 0) idx = 0;
     return SUMMARY_COLORS[idx % SUMMARY_COLORS.length];
   }
+  // ---------------------------------------------------------------------
+  // exercise icons: an anatomy figure (front or back view) with the main
+  // muscles in red and secondary muscles in blue, chosen from the exercise
+  // name. Unknown names fall back to the body-part category.
+  // ---------------------------------------------------------------------
+  var MUSCLE_JA = {
+    chestUpper: '大胸筋(上部)', chestLower: '大胸筋(下部)', frontDelt: '三角筋(前部)', sideDelt: '三角筋(中部)', rearDelt: '三角筋(後部)',
+    triceps: '上腕三頭筋', biceps: '上腕二頭筋', forearms: '前腕', abs: '腹直筋', obliques: '腹斜筋', traps: '僧帽筋', upperBack: '菱形筋・僧帽筋中部',
+    lats: '広背筋', lowerBack: '脊柱起立筋', glutes: '大臀筋', abductors: '中臀筋', adductors: '内転筋', quads: '大腿四頭筋', hamstrings: 'ハムストリングス', calves: '下腿三頭筋'
+  };
+  // [pattern, view, main[], secondary[]] — first match wins, so specific rules go first.
+  var MUSCLE_RULES = [
+    [/レッグカール|ハムストリング|ハムカール/, 'back', ['hamstrings'], ['calves', 'glutes']],
+    [/ハンマー/, 'front', ['biceps', 'forearms'], []],
+    [/リストカール|前腕/, 'front', ['forearms'], []],
+    [/カール/, 'front', ['biceps'], ['forearms']],
+    [/トライセプス|三頭|スカル|キックバック|プッシュダウン|プレスダウン|フレンチプレス|ナローベンチ|クローズグリップ/, 'back', ['triceps'], ['forearms']],
+    [/レッグエクステンション/, 'front', ['quads'], []],
+    [/カーフ|ふくらはぎ/, 'back', ['calves'], []],
+    [/ヒップスラスト|グルート|ヒップ|ブリッジ/, 'back', ['glutes'], ['hamstrings']],
+    [/アダクション|内転/, 'front', ['adductors'], ['quads']],
+    [/アブダクション|外転/, 'back', ['abductors'], ['glutes']],
+    [/ブルガリアン|ランジ|スプリット/, 'front', ['quads', 'glutes'], ['hamstrings', 'adductors']],
+    [/スクワット|レッグプレス|ハック/, 'front', ['quads', 'glutes'], ['hamstrings', 'adductors', 'calves']],
+    [/ルーマニアン|RDL|グッドモーニング|スティッフ/, 'back', ['hamstrings', 'lowerBack'], ['glutes']],
+    [/デッドリフト/, 'back', ['lowerBack', 'glutes', 'hamstrings'], ['lats', 'traps', 'forearms', 'quads']],
+    [/ラットプル|懸垂|チンニング|プルアップ|プルオーバー/, 'back', ['lats'], ['biceps', 'rearDelt', 'upperBack']],
+    [/シュラッグ/, 'back', ['traps'], ['forearms']],
+    [/リアレイズ|リアデルト|フェイスプル|リバースフライ/, 'back', ['rearDelt'], ['upperBack', 'traps']],
+    [/ロウ|ロー(?!テ)/, 'back', ['lats', 'upperBack'], ['biceps', 'rearDelt', 'lowerBack']],
+    [/サイドレイズ|ラテラル/, 'front', ['sideDelt'], ['traps']],
+    [/フロントレイズ/, 'front', ['frontDelt'], ['chestUpper']],
+    [/アップライト/, 'front', ['sideDelt', 'traps'], ['biceps']],
+    [/ショルダープレス|ミリタリー|アーノルド|オーバーヘッド/, 'front', ['frontDelt', 'sideDelt'], ['triceps', 'traps']],
+    [/ディップス/, 'front', ['chestLower', 'triceps'], ['frontDelt']],
+    [/インクライン/, 'front', ['chestUpper'], ['frontDelt', 'triceps']],
+    [/デクライン/, 'front', ['chestLower'], ['triceps', 'frontDelt']],
+    [/フライ|ペック|クロスオーバー/, 'front', ['chestUpper', 'chestLower'], ['frontDelt']],
+    [/ベンチプレス|チェストプレス|プッシュアップ|腕立て|プレス/, 'front', ['chestUpper', 'chestLower'], ['frontDelt', 'triceps']],
+    [/クランチ|腹筋|プランク|レッグレイズ|アブ|シットアップ|ニーレイズ|ローラー/, 'front', ['abs'], ['obliques']],
+    [/ツイスト|サイドベンド/, 'front', ['obliques'], ['abs']]
+  ];
+  var CATEGORY_MUSCLES = {
+    '胸': ['front', ['chestUpper', 'chestLower'], ['frontDelt', 'triceps']],
+    '背中': ['back', ['lats', 'upperBack'], ['biceps', 'rearDelt']],
+    '肩': ['front', ['frontDelt', 'sideDelt'], ['traps']],
+    '腕': ['front', ['biceps'], ['forearms']],
+    '脚': ['front', ['quads'], ['hamstrings', 'glutes', 'calves']]
+  };
+  function musclesForExercise(name, category) {
+    var n = String(name || '');
+    for (var i = 0; i < MUSCLE_RULES.length; i++) {
+      if (MUSCLE_RULES[i][0].test(n)) return { view: MUSCLE_RULES[i][1], main: MUSCLE_RULES[i][2], secondary: MUSCLE_RULES[i][3] };
+    }
+    var c = CATEGORY_MUSCLES[category];
+    if (c) return { view: c[0], main: c[1], secondary: c[2] };
+    return null;
+  }
+  function muscleTextHtml(mus) {
+    if (!mus) return '';
+    var ja = function (k) { return MUSCLE_JA[k] || k; };
+    return '<div class="trend-muscles"><span class="m">主働: ' + mus.main.map(ja).join('・') + '</span>' +
+      (mus.secondary.length ? '<br><span class="s">補助: ' + mus.secondary.map(ja).join('・') + '</span>' : '') + '</div>';
+  }
+  var MUSCLE_MAIN = '#E5484D', MUSCLE_SEC = '#3B82F6', MUSCLE_BASE = '#3E3E4A', MUSCLE_LINE = '#101014', MUSCLE_SKIN = '#5A5A66';
+  function muscleFigureSvg(view, main, secondary, tint) {
+    function f(k) { return main.indexOf(k) !== -1 ? MUSCLE_MAIN : (secondary.indexOf(k) !== -1 ? MUSCLE_SEC : MUSCLE_BASE); }
+    var st = ' stroke="' + MUSCLE_LINE + '" stroke-width="0.6"';
+    var el = function (tag, attrs, key) { return '<' + tag + ' ' + attrs + ' fill="' + f(key) + '"' + st + '/>'; };
+    var b = '<rect x="0" y="0" width="60" height="84" rx="12" fill="' + tint + '" fill-opacity="0.13"/>';
+    b += '<circle cx="30" cy="7.5" r="5.5" fill="' + MUSCLE_SKIN + '"' + st + '/><rect x="27.5" y="12.4" width="5" height="4.2" fill="' + MUSCLE_SKIN + '"' + st + '/>';
+    if (view === 'back') {
+      b += el('rect', 'x="23" y="19" width="14" height="8.5" rx="2"', 'upperBack');
+      b += el('path', 'd="M22,16 L30,13.5 L38,16 L36.5,23 L30,27.5 L23.5,23 Z"', 'traps');
+      b += el('ellipse', 'cx="17.2" cy="21.5" rx="3.8" ry="4.4"', 'rearDelt') + el('ellipse', 'cx="42.8" cy="21.5" rx="3.8" ry="4.4"', 'rearDelt');
+      b += el('path', 'd="M20.5,25 L29.4,27.5 L29.4,40.5 L23.5,36 Z"', 'lats') + el('path', 'd="M39.5,25 L30.6,27.5 L30.6,40.5 L36.5,36 Z"', 'lats');
+      b += el('rect', 'x="26.4" y="35" width="7.2" height="10" rx="2"', 'lowerBack');
+      b += el('rect', 'x="14.2" y="26.5" width="5.2" height="11" rx="2.6"', 'triceps') + el('rect', 'x="40.6" y="26.5" width="5.2" height="11" rx="2.6"', 'triceps');
+      b += el('rect', 'x="12.8" y="37.8" width="4.8" height="12.5" rx="2.4"', 'forearms') + el('rect', 'x="42.4" y="37.8" width="4.8" height="12.5" rx="2.4"', 'forearms');
+      b += el('ellipse', 'cx="21.5" cy="46" rx="2.6" ry="3.4"', 'abductors') + el('ellipse', 'cx="38.5" cy="46" rx="2.6" ry="3.4"', 'abductors');
+      b += el('ellipse', 'cx="25.8" cy="50" rx="4.6" ry="5.2"', 'glutes') + el('ellipse', 'cx="34.2" cy="50" rx="4.6" ry="5.2"', 'glutes');
+      b += el('rect', 'x="21.8" y="55.5" width="6.8" height="15" rx="3"', 'hamstrings') + el('rect', 'x="31.4" y="55.5" width="6.8" height="15" rx="3"', 'hamstrings');
+      b += el('rect', 'x="22.8" y="71" width="6" height="12" rx="2.8"', 'calves') + el('rect', 'x="31.2" y="71" width="6" height="12" rx="2.8"', 'calves');
+    } else {
+      b += el('path', 'd="M23,16.5 L30,14.5 L37,16.5 L35,19.5 L25,19.5 Z"', 'traps');
+      b += el('ellipse', 'cx="15.6" cy="22.5" rx="2.6" ry="4.4"', 'sideDelt') + el('ellipse', 'cx="44.4" cy="22.5" rx="2.6" ry="4.4"', 'sideDelt');
+      b += el('ellipse', 'cx="20" cy="21" rx="3.6" ry="4.2"', 'frontDelt') + el('ellipse', 'cx="40" cy="21" rx="3.6" ry="4.2"', 'frontDelt');
+      b += el('rect', 'x="22.4" y="18.6" width="7.2" height="5" rx="1.4"', 'chestUpper') + el('rect', 'x="30.4" y="18.6" width="7.2" height="5" rx="1.4"', 'chestUpper');
+      b += el('path', 'd="M22.4,23.8 L29.6,23.8 L29.6,29.2 Q25,30.5 22.4,27.5 Z"', 'chestLower') + el('path', 'd="M30.4,23.8 L37.6,23.8 L37.6,27.5 Q35,30.5 30.4,29.2 Z"', 'chestLower');
+      b += el('rect', 'x="22.2" y="30.5" width="3.6" height="13" rx="1.6"', 'obliques') + el('rect', 'x="34.2" y="30.5" width="3.6" height="13" rx="1.6"', 'obliques');
+      b += el('rect', 'x="26.4" y="30.5" width="7.2" height="15" rx="2"', 'abs');
+      b += '<path d="M30,31 V45 M26.6,35 H33.4 M26.6,39.5 H33.4" stroke="' + MUSCLE_LINE + '" stroke-width="0.6" fill="none"/>';
+      b += el('rect', 'x="14.2" y="26.5" width="5.2" height="11" rx="2.6"', 'biceps') + el('rect', 'x="40.6" y="26.5" width="5.2" height="11" rx="2.6"', 'biceps');
+      b += el('rect', 'x="12.8" y="37.8" width="4.8" height="12.5" rx="2.4"', 'forearms') + el('rect', 'x="42.4" y="37.8" width="4.8" height="12.5" rx="2.4"', 'forearms');
+      b += el('rect', 'x="21.8" y="46.5" width="6.8" height="19" rx="3"', 'quads') + el('rect', 'x="31.4" y="46.5" width="6.8" height="19" rx="3"', 'quads');
+      b += el('rect', 'x="28.7" y="47.5" width="2.6" height="10" rx="1.2"', 'adductors');
+      b += el('rect', 'x="22.8" y="66.5" width="6" height="14" rx="2.8"', 'calves') + el('rect', 'x="31.2" y="66.5" width="6" height="14" rx="2.8"', 'calves');
+    }
+    return '<svg viewBox="0 0 60 84" width="46" height="62" aria-hidden="true">' + b + '</svg>';
+  }
+  function exerciseIconSvg(name, category) {
+    if (category === '有酸素') return bodyIconSvg(category);
+    var mus = musclesForExercise(name, category);
+    if (!mus) return bodyIconSvg(category);
+    return muscleFigureSvg(mus.view, mus.main, mus.secondary, categoryColor(category));
+  }
+
   // Which silhouette parts to highlight for each default body part. Custom
   // parts fall back to a generic dumbbell icon.
   var BODY_HILITE = { '胸': ['torso'], '背中': ['torso'], '肩': ['shoulderL', 'shoulderR'], '腕': ['armL', 'armR'], '脚': ['legL', 'legR'] };
@@ -2473,7 +2706,7 @@
     var base = '#4C4C57';
     // cardio: a running silhouette
     if (category === '有酸素') {
-      return '<svg viewBox="0 0 44 44" width="40" height="40" aria-hidden="true">' +
+      return '<svg viewBox="0 0 44 44" width="46" height="46" style="margin:8px 0" aria-hidden="true">' +
         '<rect x="0" y="0" width="44" height="44" rx="12" fill="' + color + '" fill-opacity="0.13"/>' +
         '<g fill="' + color + '">' +
         '<circle cx="28.5" cy="10" r="4.1"/>' +
@@ -2486,7 +2719,7 @@
     }
     // generic strength icon (custom parts): a dumbbell
     if (!BODY_HILITE[category]) {
-      return '<svg viewBox="0 0 44 44" width="40" height="40" aria-hidden="true">' +
+      return '<svg viewBox="0 0 44 44" width="46" height="46" style="margin:8px 0" aria-hidden="true">' +
         '<rect x="0" y="0" width="44" height="44" rx="12" fill="' + color + '" fill-opacity="0.13"/>' +
         '<rect x="13" y="20" width="18" height="4" rx="2" fill="' + base + '"/>' +
         '<rect x="8" y="15.5" width="5.5" height="13" rx="2.2" fill="' + color + '"/>' +
@@ -2589,7 +2822,7 @@
     var rowsHtml = groups.map(function (g) {
       var items = g.items;
       var isCardio = items[0].minutes !== undefined;
-      var icon = bodyIconSvg(items[0].category);
+      var icon = exerciseIconSvg(g.name, items[0].category);
       var setsLines, subText;
       if (isCardio) {
         setsLines = items.map(function (e) { return e.minutes + '分' + (e.distance != null ? ' ・ ' + e.distance + 'km' : ''); }).join('<br>');
@@ -3545,6 +3778,10 @@
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);
   $('closeChartBtn').addEventListener('click', function () { $('chartOverlay').classList.remove('open'); });
+  $('exerciseTrend').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.trend-more');
+    if (btn) openChart(btn.dataset.exercise);
+  });
   $('closeDayDetailBtn').addEventListener('click', function () {
     openDayDetailDate = null;
     $('dayDetailOverlay').classList.remove('open');
