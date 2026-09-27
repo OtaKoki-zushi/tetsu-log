@@ -841,6 +841,13 @@
         <p class="settings-hint">LINEの自分宛メッセージなど、過去に記録したテキストをAIが解析して取り込みます。</p>
       </div>
       <div class="field">
+        <label>端末の引っ越し</label>
+        <button type="button" class="btn btn-outline" id="exportDataBtn">💾 この端末の記録を書き出す</button>
+        <button type="button" class="btn btn-outline" id="importDataBtn" style="margin-top:8px;">📂 書き出したファイルを読み込む</button>
+        <input type="file" id="importDataInput" accept="application/json,.json" style="display:none">
+        <p class="settings-hint">トレーニング記録・InBody・マイページなど、この端末(ブラウザ)に入っている内容をJSONファイルにまとめて書き出します。別の端末や別のURLで開いた鉄ログで読み込むと、そのまま引き継げます。APIキーは書き出しに含まれません。読み込むと、その端末の記録は書き出した内容で置きかわります。</p>
+      </div>
+      <div class="field">
         <label>アプリ情報</label>
         <p class="version-line" id="versionLine"></p>
         <button type="button" class="btn btn-outline" id="reloadLatestBtn">↻ 最新版を読み込む</button>
@@ -4093,6 +4100,86 @@
     var input = $('apiKeyInput');
     input.type = input.type === 'password' ? 'text' : 'password';
   });
+  // ===== 端末の引っ越し（localStorage をまるごと書き出し／読み込み） =====
+  var BACKUP_PREFIX = 'tetsulog_';
+
+  function collectBackup() {
+    var data = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || key.indexOf(BACKUP_PREFIX) !== 0) continue;
+      var raw = localStorage.getItem(key);
+      if (key === LS.settings) {
+        // APIキーはファイルに書き出さない
+        try {
+          var conf = JSON.parse(raw);
+          if (conf && typeof conf === 'object') { delete conf.apiKey; raw = JSON.stringify(conf); }
+        } catch (e) { /* 壊れていればそのまま */ }
+      }
+      data[key] = raw;
+    }
+    return { app: 'tetsu-log', version: 1, exportedAt: new Date().toISOString(), data: data };
+  }
+
+  $('exportDataBtn').addEventListener('click', function () {
+    var backup = collectBackup();
+    if (!Object.keys(backup.data).length) { showToast('書き出す記録がありません'); return; }
+    var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'tetsulog-backup-' + todayStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showToast('記録を書き出しました');
+  });
+
+  $('importDataBtn').addEventListener('click', function () { $('importDataInput').click(); });
+
+  $('importDataInput').addEventListener('change', function (ev) {
+    var file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var backup;
+      try { backup = JSON.parse(String(reader.result)); }
+      catch (e) { showToast('ファイルを読めませんでした'); return; }
+      if (!backup || backup.app !== 'tetsu-log' || !backup.data || typeof backup.data !== 'object') {
+        showToast('鉄ログの書き出しファイルではないようです'); return;
+      }
+      var keys = Object.keys(backup.data).filter(function (k) { return k.indexOf(BACKUP_PREFIX) === 0; });
+      if (!keys.length) { showToast('記録が入っていません'); return; }
+      var when = typeof backup.exportedAt === 'string' ? backup.exportedAt.slice(0, 10) : '不明な日';
+      if (!confirm('この端末の記録を、' + when + ' に書き出した内容で置きかえます。よろしいですか？')) return;
+      try {
+        keys.forEach(function (key) {
+          var value = backup.data[key];
+          var text = typeof value === 'string' ? value : JSON.stringify(value);
+          if (key === LS.settings) {
+            // 書き出しにAPIキーは入っていないので、この端末の設定から引き継ぐ
+            try {
+              var incoming = JSON.parse(text) || {};
+              var current = JSON.parse(localStorage.getItem(LS.settings) || '{}') || {};
+              if (!incoming.apiKey && current.apiKey) incoming.apiKey = current.apiKey;
+              text = JSON.stringify(incoming);
+            } catch (e) { /* そのまま入れる */ }
+          }
+          localStorage.setItem(key, text);
+        });
+      } catch (e) {
+        showToast('保存できませんでした(容量不足かもしれません)');
+        return;
+      }
+      showToast('読み込みました。画面を更新します');
+      setTimeout(function () { location.reload(); }, 900);
+    };
+    reader.onerror = function () { showToast('ファイルを読めませんでした'); };
+    reader.readAsText(file);
+  });
+
   $('saveSettingsBtn').addEventListener('click', function () {
     var wasTracking = !!getSetting('trackCountry', true);
     state.settings = {

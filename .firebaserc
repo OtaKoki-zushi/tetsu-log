@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "tetsu-log-app"
+  },
+  "targets": {
+    "tetsu-log-app": {
+      "hosting": {
+        "tetsu": [
+          "tetsu-log-koki"
+        ]
+      }
+    }
+  }
+}

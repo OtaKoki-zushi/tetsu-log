@@ -1,4 +1,20 @@
 {
+  "hosting": {
+    "target": "tetsu",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "firestore.rules",
+      ".git",
+      ".git/**",
+      "**/.*",
+      "**/.*/**",
+      "**/node_modules/**",
+      "KOKI'S LOG（クラウド版）.html",
+      "使い方.txt"
+    ]
+  },
   "firestore": {
     "rules": "firestore.rules"
   }
