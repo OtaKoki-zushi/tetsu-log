@@ -32,7 +32,11 @@
 
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  /* The page itself never scrolls (iOS would otherwise bounce the whole app,
+     header and tab bar included); only the active .screen scrolls. */
+  html { overflow: hidden; overscroll-behavior: none; }
   body {
+    position: fixed; inset: 0; width: 100%; overflow: hidden; overscroll-behavior: none;
     background: var(--page-bg);
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
       "Hiragino Sans", "Yu Gothic Medium", "Yu Gothic", "Segoe UI", sans-serif;
@@ -62,6 +66,7 @@
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
+    position: relative; z-index: 5;
     border-bottom: 1px solid var(--border);
   }
   .brand { display: flex; align-items: center; gap: 10px; }
@@ -95,21 +100,17 @@
   .auth-badge-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
   .screen {
-    flex: 1; overflow-y: auto; padding: 16px 20px 24px;
+    flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px;
     display: none; flex-direction: column; gap: 18px;
     -ms-overflow-style: none; scrollbar-width: none;
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   }
   .screen::-webkit-scrollbar { display: none; }
   .screen.active { display: flex; animation: rise 0.28s ease both; }
   @media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
-  /* 記録画面: 入力フォームは固定し、本日の記録リストだけをスクロール */
-  #screen-record.active { overflow: hidden; }
-  .record-scroll {
-    flex: 1; min-height: 0; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 18px;
-    -ms-overflow-style: none; scrollbar-width: none;
-  }
-  .record-scroll::-webkit-scrollbar { display: none; }
+  /* 記録画面: 画面全体がスクロールし、ヘッダーと下タブは固定。
+     (入力フォームに成長カードが付いて背が高くなったため、固定表示をやめた) */
+  .record-scroll { flex: 1; display: flex; flex-direction: column; gap: 18px; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
   h2.screen-title { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
@@ -384,7 +385,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
-  .bottom-nav { flex-shrink: 0; display: flex; border-top: 1px solid var(--border); background: var(--nav-bg); padding-bottom: env(safe-area-inset-bottom); }
+  .bottom-nav { flex-shrink: 0; position: relative; z-index: 5; display: flex; border-top: 1px solid var(--border); background: var(--nav-bg); padding-bottom: env(safe-area-inset-bottom); }
   .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; color: var(--text-faint); background: none; border: none; font: inherit; cursor: pointer; }
   .nav-item.active { color: var(--accent); }
   .nav-item.active svg { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55)); }
