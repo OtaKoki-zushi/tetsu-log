@@ -849,6 +849,13 @@
         <p class="settings-hint">トレーニング記録・InBody・マイページなど、この端末(ブラウザ)に入っている内容をJSONファイルにまとめて書き出します。別の端末や別のURLで開いた鉄ログで読み込むと、そのまま引き継げます。APIキーは書き出しに含まれません。読み込むと、その端末の記録は書き出した内容で置きかわります。</p>
       </div>
       <div class="field">
+        <label>Googleドライブに自動で送る</label>
+        <input type="url" id="driveSyncUrlInput" placeholder="Apps Script の URL(https://script.google.com/macros/s/…/exec)" autocomplete="off">
+        <input type="password" id="driveSyncKeyInput" placeholder="合言葉(Apps Script に書いたものと同じ)" autocomplete="off" style="margin-top:8px;">
+        <button type="button" class="btn btn-outline" id="driveSyncNowBtn" style="margin-top:8px;">☁️ 今すぐドライブに送る</button>
+        <p class="settings-hint" id="driveSyncStatus">記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。URLと合言葉を入れて「保存する」を押すと有効になります。</p>
+      </div>
+      <div class="field">
         <label>アプリ情報</label>
         <p class="version-line" id="versionLine"></p>
         <button type="button" class="btn btn-outline" id="reloadLatestBtn">↻ 最新版を読み込む</button>
@@ -1021,6 +1028,9 @@
   }
   function saveJSON(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage full / disabled */ }
+    if (key === LS.entries || key === LS.inbody || key === LS.myPage || key === LS.dailyNotes) {
+      if (typeof scheduleDriveSync === 'function') scheduleDriveSync('local');
+    }
   }
   // Feedback used to be stored as a single object (always "today's" feedback).
   // Now it's a dict keyed by date so any past day can have its own feedback.
@@ -3788,6 +3798,9 @@
     $('restTimerModeSelect').value = getSetting('restTimerMode', 'app');
     $('shortcutNameInput').value = getSetting('shortcutName', '');
     $('trackCountryInput').checked = !!getSetting('trackCountry', true);
+    $('driveSyncUrlInput').value = getSetting('driveSyncUrl', '');
+    $('driveSyncKeyInput').value = getSetting('driveSyncKey', '');
+    renderDriveSyncStatus();
     var cs = $('countryStatusHint');
     if (cs) {
       var base = '位置情報が使えないときはタイムゾーンから判定します。位置情報の座標は保存されず、国名だけを各セットに記録します。';
@@ -4114,7 +4127,7 @@
         // APIキーはファイルに書き出さない
         try {
           var conf = JSON.parse(raw);
-          if (conf && typeof conf === 'object') { delete conf.apiKey; raw = JSON.stringify(conf); }
+          if (conf && typeof conf === 'object') { delete conf.apiKey; delete conf.driveSyncKey; raw = JSON.stringify(conf); }
         } catch (e) { /* 壊れていればそのまま */ }
       }
       data[key] = raw;
@@ -4190,9 +4203,12 @@
       birthdate: $('birthdateInput').value,
       restTimerMode: $('restTimerModeSelect').value,
       shortcutName: $('shortcutNameInput').value.trim(),
-      trackCountry: $('trackCountryInput').checked
+      trackCountry: $('trackCountryInput').checked,
+      driveSyncUrl: $('driveSyncUrlInput').value.trim(),
+      driveSyncKey: $('driveSyncKeyInput').value.trim()
     };
     saveJSON(LS.settings, state.settings);
+    if (state.settings.driveSyncUrl) scheduleDriveSync('settings', 500);
     if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
     showToast('設定を保存しました');
@@ -4302,6 +4318,101 @@
     }
     selectCategory(trimmed, 'manual');
   });
+
+  // ---------------------------------------------------------------------
+  // Googleドライブへの自動送信。
+  // 送り先はユーザー自身の Google Apps Script(ウェブアプリ)。記録が変わるたびに
+  // 全記録を1つのJSONにまとめて POST し、Apps Script がドライブに保存する。
+  // no-cors で送るので応答は読めない(送信できたかどうかだけ記録する)。
+  // ---------------------------------------------------------------------
+  var LS_DRIVE_LAST = 'tetsulogx_drive_last'; // 書き出し(tetsulog_*)の対象外にする
+  var driveSyncTimer = null;
+  var driveSyncSending = false;
+  var driveSyncPending = false;
+
+  function driveSyncEnabled() {
+    var url = getSetting('driveSyncUrl', '');
+    return /^https:\/\/script\.google(usercontent)?\.com\//.test(url);
+  }
+  function buildDrivePayload() {
+    var mp = {};
+    Object.keys(state.myPage || {}).forEach(function (k) { if (k !== 'photo') mp[k] = state.myPage[k]; });
+    var entries = (state.entries || []).slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return (a.createdAt || a.ts || 0) - (b.createdAt || b.ts || 0);
+    });
+    var inbody = (state.inbody || []).map(function (r) {
+      var o = {};
+      Object.keys(r).forEach(function (k) { if (!/photo|image/i.test(k)) o[k] = r[k]; });
+      return o;
+    });
+    return {
+      app: 'tetsu-log', version: 1, kind: 'drive-sync',
+      key: getSetting('driveSyncKey', ''),
+      exportedAt: new Date().toISOString(),
+      entries: entries,
+      inbody: inbody,
+      myPage: mp,
+      dailyNotes: state.dailyNotes || {},
+      categories: state.categories || []
+    };
+  }
+  function scheduleDriveSync(reason, delay) {
+    if (!driveSyncEnabled()) return;
+    if (driveSyncTimer) clearTimeout(driveSyncTimer);
+    driveSyncTimer = setTimeout(function () { driveSyncTimer = null; sendToDrive(reason, false); }, delay == null ? 5000 : delay);
+  }
+  function sendToDrive(reason, manual) {
+    if (!driveSyncEnabled()) {
+      if (manual) showToast('先に Apps Script の URL を入れて保存してください');
+      return Promise.resolve(false);
+    }
+    if (!window.fetch || !navigator.onLine) {
+      if (manual) showToast('オフラインのため送れませんでした');
+      return Promise.resolve(false);
+    }
+    if (driveSyncSending) { driveSyncPending = true; return Promise.resolve(false); }
+    driveSyncSending = true;
+    var body = JSON.stringify(buildDrivePayload());
+    return fetch(getSetting('driveSyncUrl', ''), {
+      method: 'POST', mode: 'no-cors', keepalive: body.length < 60000,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
+    }).then(function () {
+      try { localStorage.setItem(LS_DRIVE_LAST, JSON.stringify({ at: Date.now(), count: (state.entries || []).length })); } catch (e) {}
+      renderDriveSyncStatus();
+      if (manual) showToast('ドライブに送りました');
+      return true;
+    }).catch(function () {
+      if (manual) showToast('ドライブに送れませんでした');
+      return false;
+    }).then(function (ok) {
+      driveSyncSending = false;
+      if (driveSyncPending) { driveSyncPending = false; scheduleDriveSync('pending', 1000); }
+      return ok;
+    });
+  }
+  function renderDriveSyncStatus() {
+    var el = $('driveSyncStatus');
+    if (!el) return;
+    var base = '記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。';
+    if (!driveSyncEnabled()) { el.textContent = base + 'URLと合言葉を入れて「保存する」を押すと有効になります。'; return; }
+    var last = null;
+    try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
+    el.textContent = base + (last && last.at ? '前回の送信: ' + formatVersionDate(new Date(last.at)) + '(' + last.count + 'セット)' : 'まだ送信していません。');
+  }
+  $('driveSyncNowBtn').addEventListener('click', function () { sendToDrive('manual', true); });
+  document.addEventListener('visibilitychange', function () {
+    // アプリを閉じる・切り替える直前に、待っている送信をすぐ出す
+    if (document.visibilityState === 'hidden' && driveSyncTimer) {
+      clearTimeout(driveSyncTimer); driveSyncTimer = null; sendToDrive('hidden', false);
+    }
+  });
+  // 起動時:前回の送信から6時間以上たっていれば送る(他の端末での変更も拾える)
+  setTimeout(function () {
+    var last = null;
+    try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
+    if (!last || Date.now() - last.at > 6 * 3600000) scheduleDriveSync('startup', 8000);
+  }, 0);
 
   // ---------------------------------------------------------------------
   // init
@@ -4428,6 +4539,7 @@
       renderTodayList();
       renderHistory();
       refreshDayDetailIfOpen();
+      scheduleDriveSync('cloud');
     },
     applyCloudProfile: function (profile) {
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
@@ -4451,6 +4563,7 @@
     applyCloudInbody: function (list) {
       state.inbody = list;
       renderInbodyList();
+      scheduleDriveSync('cloud');
     },
     reloadFromLocal: reloadFromLocal
   };
