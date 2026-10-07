@@ -4400,7 +4400,18 @@
     try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
     el.textContent = base + (last && last.at ? '前回の送信: ' + formatVersionDate(new Date(last.at)) + '(' + last.count + 'セット)' : 'まだ送信していません。');
   }
-  $('driveSyncNowBtn').addEventListener('click', function () { sendToDrive('manual', true); });
+  $('driveSyncNowBtn').addEventListener('click', function () {
+    // 「保存する」を押し忘れていても、欄に入っているURLと合言葉で送れるようにする
+    var url = $('driveSyncUrlInput').value.trim();
+    var key = $('driveSyncKeyInput').value.trim();
+    if (url && (url !== getSetting('driveSyncUrl', '') || key !== getSetting('driveSyncKey', ''))) {
+      state.settings.driveSyncUrl = url;
+      state.settings.driveSyncKey = key;
+      saveJSON(LS.settings, state.settings);
+      if (cloudHooks) cloudHooks.writeProfile();
+    }
+    sendToDrive('manual', true);
+  });
   document.addEventListener('visibilitychange', function () {
     // アプリを閉じる・切り替える直前に、待っている送信をすぐ出す
     if (document.visibilityState === 'hidden' && driveSyncTimer) {
