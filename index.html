@@ -447,6 +447,15 @@
   .ib-empty-note { color: var(--text-faint); font-size: 12.5px; text-align: center; padding: 10px 0; }
   .settings-header { display: flex; align-items: center; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .settings-header h2 { font-size: 16px; margin: 0; font-weight: 800; }
+  /* 日別画面: 前後のトレーニング日へ移るボタン */
+  .dd-nav { display: flex; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .dd-nav-btn { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .dd-nav-btn.next { justify-content: flex-end; text-align: right; }
+  .dd-nav-btn .arrow { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .dd-nav-btn .lbl { display: block; font-size: 10.5px; font-weight: 700; color: var(--text-faint); }
+  .dd-nav-btn .date { display: block; font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .dd-nav-btn:not(:disabled):active { background: var(--surface-2); border-color: var(--accent); }
+  .dd-nav-btn:disabled { opacity: 0.35; cursor: default; }
   .settings-body { padding: 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
   .settings-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; margin: 6px 0 0; }
   .settings-hint a { color: var(--accent); }
@@ -821,7 +830,7 @@
         <label class="check-row"><input type="checkbox" id="trackCountryInput"> 位置情報から国を自動で記録する</label>
         <p class="settings-hint" id="countryStatusHint">位置情報が使えないときはタイムゾーンから判定します。位置情報の座標は保存されず、国名だけを各セットに記録します。</p>
       </div>
-      <div class="field">
+      <div class="field" style="display:none;"><!-- APIキー・モデル設定は使わないので非表示 -->
         <label for="apiKeyInput">Anthropic APIキー</label>
         <div class="key-row">
           <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
@@ -829,7 +838,7 @@
         </div>
         <p class="settings-hint">このブラウザ内(localStorage)にのみ保存され、Anthropic社のAPI以外には送信されません。APIキーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> から取得できます(利用には料金が発生します)。ログイン中はこの設定もクラウドに同期されます。</p>
       </div>
-      <div class="field">
+      <div class="field" style="display:none;">
         <label for="modelSelect">使用モデル</label>
         <select id="modelSelect">
           <option value="claude-opus-4-8">Claude Opus 4.8(高精度・推奨)</option>
@@ -888,6 +897,10 @@
       <button class="icon-btn" id="closeDayDetailBtn" type="button" aria-label="閉じる" style="font-weight:800;font-size:18px;">×</button>
       <h2 id="dayDetailTitle">日付</h2>
       <div style="width:36px"></div>
+    </div>
+    <div class="dd-nav">
+      <button type="button" class="dd-nav-btn" id="ddPrevBtn"><span class="arrow">‹</span><span><span class="lbl">前の日</span><span class="date" id="ddPrevDate"></span></span></button>
+      <button type="button" class="dd-nav-btn next" id="ddNextBtn"><span><span class="lbl">次の日</span><span class="date" id="ddNextDate"></span></span><span class="arrow">›</span></button>
     </div>
     <div class="settings-body" id="dayDetailBody"></div>
   </div>
@@ -2157,8 +2170,38 @@
     showToast(formatDateLabel(dateStr) + ' の国を ' + countryFlag(code) + ' ' + countryName(code) + ' に変更しました');
   }
 
+  // 記録のある日だけを順に並べ、前後のトレーニング日を探す
+  function neighborTrainingDates(dateStr) {
+    var seen = {};
+    state.entries.forEach(function (e) { if (e.date) seen[e.date] = true; });
+    var dates = Object.keys(seen).sort();
+    var prev = null, next = null;
+    dates.forEach(function (d) {
+      if (d < dateStr) prev = d;
+      else if (d > dateStr && !next) next = d;
+    });
+    return { prev: prev, next: next };
+  }
+  function renderDayNav(dateStr) {
+    var nb = neighborTrainingDates(dateStr);
+    $('ddPrevBtn').disabled = !nb.prev;
+    $('ddNextBtn').disabled = !nb.next;
+    $('ddPrevBtn').dataset.date = nb.prev || '';
+    $('ddNextBtn').dataset.date = nb.next || '';
+    $('ddPrevDate').textContent = nb.prev ? formatDateLabelWithYear(nb.prev) : 'なし';
+    $('ddNextDate').textContent = nb.next ? formatDateLabelWithYear(nb.next) : 'なし';
+  }
+  ['ddPrevBtn', 'ddNextBtn'].forEach(function (id) {
+    $(id).addEventListener('click', function () {
+      if (!this.dataset.date) return;
+      openDayDetail(this.dataset.date);
+      $('dayDetailBody').scrollTop = 0;
+    });
+  });
+
   function openDayDetail(dateStr) {
     openDayDetailDate = dateStr;
+    renderDayNav(dateStr);
     var ddEntries = state.entries.filter(function (e) { return e.date === dateStr; });
     $('dayDetailTitle').textContent = formatDateLabel(dateStr) + (ddEntries.length ? ' ' + countryFlag(dayCountry(ddEntries)) : '');
     renderDayDetailBody(dateStr);
@@ -2166,7 +2209,7 @@
   }
 
   function refreshDayDetailIfOpen() {
-    if (openDayDetailDate) renderDayDetailBody(openDayDetailDate);
+    if (openDayDetailDate) { renderDayDetailBody(openDayDetailDate); renderDayNav(openDayDetailDate); }
   }
 
   function renderTodayList() {
