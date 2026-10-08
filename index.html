@@ -137,7 +137,7 @@
   }
   .screen-header .screen-desc { color: var(--text-muted); }
 
-  .pillrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .pillrow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; flex-shrink: 0; }
   .pill {
     flex-shrink: 0; padding: 8px 16px; border-radius: 999px;
     border: 1px solid var(--border); background: var(--surface);
@@ -265,7 +265,7 @@
 
   .rest-timer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .rest-timer-time { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--accent); }
-  .rest-timer-presets { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; }
+  .rest-timer-presets { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; flex-shrink: 0; }
   .rest-timer-presets .pill { font-size: 11.5px; padding: 6px 12px; }
   .rest-timer-presets .pill.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
@@ -385,12 +385,24 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
-  .bottom-nav { flex-shrink: 0; position: relative; z-index: 5; display: flex; border-top: 1px solid var(--border); background: var(--nav-bg); padding-bottom: env(safe-area-inset-bottom); }
-  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; color: var(--text-faint); background: none; border: none; font: inherit; cursor: pointer; }
-  .nav-item.active { color: var(--accent); }
-  .nav-item.active svg { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55)); }
-  .nav-item svg { width: 20px; height: 20px; transition: filter 0.15s ease; }
-  .nav-item span { font-size: 10.5px; font-weight: 700; }
+  /* 下タブ: 浮いたカプセルの中を、光るインジケーターが左右にすべる */
+  .bottom-nav { flex-shrink: 0; position: relative; z-index: 5; background: var(--bg); padding: 8px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .nav-pill { position: relative; display: flex; padding: 5px; border-radius: 22px; background: var(--nav-bg); border: 1px solid var(--border); box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
+  .nav-indicator { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 3); border-radius: 17px; background: var(--accent-grad); box-shadow: 0 0 18px -2px rgba(34, 211, 238, 0.55); transform: translateX(calc(var(--nav-i, 0) * 100%)); transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease; pointer-events: none; }
+  .nav-pill[data-i="-1"] .nav-indicator { opacity: 0; }
+  .nav-item { position: relative; z-index: 1; flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0; color: var(--text-faint); background: none; border: none; border-radius: 17px; font: inherit; cursor: pointer; transition: color 0.2s ease; -webkit-tap-highlight-color: transparent; }
+  .nav-item:not(.active):active { color: var(--text-muted); }
+  .nav-item.active { color: var(--accent-ink); }
+  .nav-item svg { width: 19px; height: 19px; flex-shrink: 0; }
+  .nav-item.active svg { stroke-width: 2.2; }
+  .nav-item span { font-size: 12.5px; font-weight: 800; letter-spacing: 0.01em; }
+  @media (prefers-reduced-motion: reduce) { .nav-indicator, .nav-item { transition: none; } }
+  /* スワイプで画面を移るときのアニメーション */
+  .screen.active.slide-next { animation: slideFromRight 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .screen.active.slide-prev { animation: slideFromLeft 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes slideFromRight { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+  @keyframes slideFromLeft { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .screen.active.slide-next, .screen.active.slide-prev { animation: none; } }
 
   .settings-overlay {
     position: fixed; inset: 0; background: var(--bg); z-index: 50;
@@ -750,6 +762,8 @@
   </section>
 
   <div class="bottom-nav">
+   <div class="nav-pill" id="navPill" data-i="0">
+    <span class="nav-indicator" aria-hidden="true"></span>
     <button class="nav-item active" data-target="record" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
       <span>Record</span>
@@ -762,6 +776,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-6"></path></svg>
       <span>Progress</span>
     </button>
+   </div>
   </div>
 
   <!-- ===== 設定 ===== -->
@@ -4211,13 +4226,65 @@
   // ---------------------------------------------------------------------
   // screen switching
   // ---------------------------------------------------------------------
-  function showScreen(name) {
-    document.querySelectorAll('.screen').forEach(function (el) { el.classList.toggle('active', el.id === 'screen-' + name); });
+  var TAB_ORDER = ['record', 'history', 'progress'];
+  var currentScreen = 'record';
+  function showScreen(name, dir) {
+    document.querySelectorAll('.screen').forEach(function (el) {
+      var on = el.id === 'screen-' + name;
+      el.classList.remove('slide-next', 'slide-prev');
+      if (on && dir) el.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
+      el.classList.toggle('active', on);
+    });
     document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.target === name); });
     $('mypageBtn').classList.toggle('active', name === 'mypage');
+    var i = TAB_ORDER.indexOf(name);
+    var pill = $('navPill');
+    pill.dataset.i = String(i);
+    if (i >= 0) pill.style.setProperty('--nav-i', i);
+    currentScreen = name;
   }
+
+  // 画面を左右にスワイプして Record ⇄ History ⇄ Progress を移動する。
+  // 横スクロールする所・セットの削除スワイプ・グラフの週送り・入力欄の上では反応しない。
+  (function bindTabSwipe() {
+    var sx = 0, sy = 0, st = 0, tracking = false;
+    function blocked(el) {
+      for (var n = el; n && n.nodeType === 1 && n.id !== 'app'; n = n.parentElement) {
+        if (n.matches('input, textarea, select, .set-row, #historyGraph, .settings-overlay, [data-no-tab-swipe]')) return true;
+        if (n.scrollWidth > n.clientWidth + 2) {
+          var ox = getComputedStyle(n).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return true;
+        }
+      }
+      return false;
+    }
+    var appEl = $('app');
+    appEl.addEventListener('touchstart', function (ev) {
+      tracking = false;
+      if (ev.touches.length !== 1 || TAB_ORDER.indexOf(currentScreen) < 0) return;
+      if (document.querySelector('.settings-overlay.open')) return;
+      if (blocked(ev.target)) return;
+      sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; st = Date.now();
+      if (sx < 24 || sx > window.innerWidth - 24) return; // 画面端はブラウザの「戻る」操作に任せる
+      tracking = true;
+    }, { passive: true });
+    appEl.addEventListener('touchend', function (ev) {
+      if (!tracking) return;
+      tracking = false;
+      var t = ev.changedTouches[0];
+      var dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 800) return;
+      var i = TAB_ORDER.indexOf(currentScreen) + (dx < 0 ? 1 : -1);
+      if (i < 0 || i >= TAB_ORDER.length) return;
+      showScreen(TAB_ORDER[i], dx < 0 ? 1 : -1);
+    }, { passive: true });
+    appEl.addEventListener('touchcancel', function () { tracking = false; }, { passive: true });
+  })();
   document.querySelectorAll('.nav-item').forEach(function (btn) {
-    btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
+    btn.addEventListener('click', function () {
+      var from = TAB_ORDER.indexOf(currentScreen), to = TAB_ORDER.indexOf(btn.dataset.target);
+      showScreen(btn.dataset.target, from >= 0 && to !== from ? (to > from ? 1 : -1) : 0);
+    });
   });
   $('mypageBtn').addEventListener('click', function () { showScreen('mypage'); });
   $('sendRecordsBtn').addEventListener('click', function () {
