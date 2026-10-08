@@ -4428,10 +4428,15 @@
   // no-cors で送るので応答は読めない(送信できたかどうかだけ記録する)。
   // ---------------------------------------------------------------------
   var LS_DRIVE_LAST = 'tetsulogx_drive_last'; // 書き出し(tetsulog_*)の対象外にする
+  var LS_DRIVE_DIRTY = 'tetsulogx_drive_dirty'; // まだドライブに届いていない変更がある
+  var LS_DRIVE_ERR = 'tetsulogx_drive_err';     // 直近の送信エラー
   var driveSyncTimer = null;
   var driveSyncSending = false;
   var driveSyncPending = false;
 
+  function hasUnsentDriveChanges() {
+    try { return !!localStorage.getItem(LS_DRIVE_DIRTY); } catch (e) { return false; }
+  }
   function driveSyncEnabled() {
     var url = getSetting('driveSyncUrl', '');
     return /^https:\/\/script\.google(usercontent)?\.com\//.test(url);
@@ -4461,6 +4466,7 @@
   }
   function scheduleDriveSync(reason, delay) {
     if (!driveSyncEnabled()) return;
+    if (reason === 'local' || reason === 'cloud') { try { localStorage.setItem(LS_DRIVE_DIRTY, String(Date.now())); } catch (e) {} }
     if (driveSyncTimer) clearTimeout(driveSyncTimer);
     driveSyncTimer = setTimeout(function () { driveSyncTimer = null; sendToDrive(reason, false); }, delay == null ? 5000 : delay);
   }
@@ -4476,18 +4482,47 @@
     if (driveSyncSending) { driveSyncPending = true; return Promise.resolve(false); }
     driveSyncSending = true;
     var body = JSON.stringify(buildDrivePayload());
-    return fetch(getSetting('driveSyncUrl', ''), {
-      method: 'POST', mode: 'no-cors', keepalive: body.length < 60000,
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body
-    }).then(function () {
-      try { localStorage.setItem(LS_DRIVE_LAST, JSON.stringify({ at: Date.now(), count: (state.entries || []).length })); } catch (e) {}
+    var url = getSetting('driveSyncUrl', '');
+    var startedAt = Date.now();
+    var opts = { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, keepalive: body.length < 60000 };
+    function markSent(confirmed) {
+      try {
+        localStorage.setItem(LS_DRIVE_LAST, JSON.stringify({ at: Date.now(), count: (state.entries || []).length, confirmed: confirmed }));
+        if (Number(localStorage.getItem(LS_DRIVE_DIRTY) || 0) <= startedAt) localStorage.removeItem(LS_DRIVE_DIRTY);
+        localStorage.removeItem(LS_DRIVE_ERR);
+      } catch (e) {}
       renderDriveSyncStatus();
-      if (manual) showToast('ドライブに送りました');
-      return true;
-    }).catch(function () {
-      if (manual) showToast('ドライブに送れませんでした');
-      return false;
+    }
+    // まず返事を読める形で送り、Apps Script の結果(成功/合言葉違いなど)を確かめる。
+    // 読めない環境では、従来どおり返事なし(no-cors)で送る。
+    return fetch(url, opts).then(function (res) {
+      return res.text().then(function (t) {
+        var r = null;
+        try { r = JSON.parse(t); } catch (e) {}
+        if (r && r.ok) {
+          markSent(true);
+          if (manual) showToast('ドライブに送りました(' + r.entries + 'セット)');
+          return true;
+        }
+        var err = r && r.error === 'unauthorized' ? '合言葉が Apps Script と一致していません'
+          : r && r.error ? 'ドライブ側でエラー: ' + r.error
+          : 'Apps Script から想定外の返事がありました(URLを確認してください)';
+        try { localStorage.setItem(LS_DRIVE_ERR, JSON.stringify({ at: Date.now(), msg: err })); } catch (e) {}
+        renderDriveSyncStatus();
+        if (manual) showToast('送れませんでした: ' + err);
+        return false;
+      });
+    }, function () {
+      return fetch(url, Object.assign({}, opts, { mode: 'no-cors' })).then(function () {
+        markSent(false);
+        if (manual) showToast('ドライブに送りました(届いたかは確認できません)');
+        return true;
+      }).catch(function () {
+        if (manual) showToast('ドライブに送れませんでした(通信エラー)');
+        return false;
+      });
     }).then(function (ok) {
+      if (ok) { try { localStorage.removeItem(LS_DRIVE_ERR); } catch (e) {} }
       driveSyncSending = false;
       if (driveSyncPending) { driveSyncPending = false; scheduleDriveSync('pending', 1000); }
       return ok;
@@ -4498,8 +4533,11 @@
     if (rec) {
       var lastRec = null;
       try { lastRec = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
+      var errRec = null;
+      try { errRec = JSON.parse(localStorage.getItem(LS_DRIVE_ERR) || 'null'); } catch (e) {}
       rec.textContent = !driveSyncEnabled() ? '設定画面でApps ScriptのURLと合言葉を保存すると使えます'
-        : (lastRec && lastRec.at ? '前回の送信: ' + formatVersionDate(new Date(lastRec.at)) : 'まだ送信していません');
+        : errRec ? '⚠️ 前回は送れませんでした: ' + errRec.msg
+        : (lastRec && lastRec.at ? '前回の送信: ' + formatVersionDate(new Date(lastRec.at)) + (lastRec.confirmed ? ' ✓' : '') : 'まだ送信していません');
     }
     var el = $('driveSyncStatus');
     if (!el) return;
@@ -4526,12 +4564,15 @@
     if (document.visibilityState === 'hidden' && driveSyncTimer) {
       clearTimeout(driveSyncTimer); driveSyncTimer = null; sendToDrive('hidden', false);
     }
+    // 閉じる直前の送信は、データが大きいとスマホに止められることがある。
+    // 届いていない変更が残っていれば、アプリに戻ったときにもう一度送る。
+    if (document.visibilityState === 'visible' && hasUnsentDriveChanges()) scheduleDriveSync('resume', 2000);
   });
   // 起動時:前回の送信から6時間以上たっていれば送る(他の端末での変更も拾える)
   setTimeout(function () {
     var last = null;
     try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
-    if (!last || Date.now() - last.at > 6 * 3600000) scheduleDriveSync('startup', 8000);
+    if (!last || Date.now() - last.at > 6 * 3600000 || hasUnsentDriveChanges()) scheduleDriveSync('startup', 4000);
     renderDriveSyncStatus();
   }, 0);
 
