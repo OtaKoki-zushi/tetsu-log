@@ -568,7 +568,8 @@
 
     <div class="record-scroll">
       <div class="cta-bar" style="margin-top:auto;">
-        <button class="btn btn-primary" id="gotoFeedbackBtn" type="button">フィードバックをもらう →</button>
+        <button class="btn btn-primary" id="sendRecordsBtn" type="button">☁️ 記録をドライブに送る</button>
+        <p class="settings-hint" id="sendRecordsStatus" style="text-align:center; margin:6px 0 0;"></p>
       </div>
     </div>
   </section>
@@ -4227,11 +4228,10 @@
     btn.addEventListener('click', function () { showScreen(btn.dataset.target); });
   });
   $('mypageBtn').addEventListener('click', function () { showScreen('mypage'); });
-  $('gotoFeedbackBtn').addEventListener('click', function () {
-    state.feedbackSelectedDate = todayStr();
-    $('feedbackDateInput').value = state.feedbackSelectedDate;
-    showScreen('feedback');
-    generateFeedback();
+  $('sendRecordsBtn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    sendToDrive('manual', true).then(function () { btn.disabled = false; });
   });
 
   // ---------------------------------------------------------------------
@@ -4392,6 +4392,13 @@
     });
   }
   function renderDriveSyncStatus() {
+    var rec = $('sendRecordsStatus');
+    if (rec) {
+      var lastRec = null;
+      try { lastRec = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
+      rec.textContent = !driveSyncEnabled() ? '設定画面でApps ScriptのURLと合言葉を保存すると使えます'
+        : (lastRec && lastRec.at ? '前回の送信: ' + formatVersionDate(new Date(lastRec.at)) : 'まだ送信していません');
+    }
     var el = $('driveSyncStatus');
     if (!el) return;
     var base = '記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。';
@@ -4423,6 +4430,7 @@
     var last = null;
     try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
     if (!last || Date.now() - last.at > 6 * 3600000) scheduleDriveSync('startup', 8000);
+    renderDriveSyncStatus();
   }, 0);
 
   // ---------------------------------------------------------------------
