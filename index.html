@@ -869,8 +869,8 @@
         <label>Googleドライブに自動で送る</label>
         <input type="url" id="driveSyncUrlInput" placeholder="Apps Script の URL(https://script.google.com/macros/s/…/exec)" autocomplete="off">
         <input type="password" id="driveSyncKeyInput" placeholder="合言葉(Apps Script に書いたものと同じ)" autocomplete="off" style="margin-top:8px;">
-        <button type="button" class="btn btn-outline" id="driveSyncNowBtn" style="margin-top:8px;">☁️ 今すぐドライブに送る</button>
-        <p class="settings-hint" id="driveSyncStatus">記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。URLと合言葉を入れて「保存する」を押すと有効になります。</p>
+        <button type="button" class="btn btn-outline" id="driveSyncNowBtn" style="margin-top:8px;">💾 保存してドライブに送る</button>
+        <p class="settings-hint" id="driveSyncStatus">記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。URLと合言葉を入れて「保存してドライブに送る」を押すと有効になります。</p>
       </div>
       <div class="field">
         <label>アプリ情報</label>
@@ -4542,7 +4542,7 @@
     var el = $('driveSyncStatus');
     if (!el) return;
     var base = '記録が変わるたびに、全記録をGoogleドライブのフォルダへ自動で送ります(JSONとCSV)。';
-    if (!driveSyncEnabled()) { el.textContent = base + 'URLと合言葉を入れて「保存する」を押すと有効になります。'; return; }
+    if (!driveSyncEnabled()) { el.textContent = base + 'URLと合言葉を入れて「保存してドライブに送る」を押すと有効になります。'; return; }
     var last = null;
     try { last = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
     el.textContent = base + (last && last.at ? '前回の送信: ' + formatVersionDate(new Date(last.at)) + '(' + last.count + 'セット)' : 'まだ送信していません。');
@@ -4551,7 +4551,8 @@
     // 「保存する」を押し忘れていても、欄に入っているURLと合言葉で送れるようにする
     var url = $('driveSyncUrlInput').value.trim();
     var key = $('driveSyncKeyInput').value.trim();
-    if (url && (url !== getSetting('driveSyncUrl', '') || key !== getSetting('driveSyncKey', ''))) {
+    if (!url) { showToast('Apps Script の URL を入れてください'); return; }
+    if (url !== getSetting('driveSyncUrl', '') || key !== getSetting('driveSyncKey', '')) {
       state.settings.driveSyncUrl = url;
       state.settings.driveSyncKey = key;
       saveJSON(LS.settings, state.settings);
