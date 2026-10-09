@@ -4749,6 +4749,12 @@
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
       if (profile.dict) state.dict = profile.dict;
       if (profile.settings) { state.settings = profile.settings; restoreDriveConf(); }
+      // この端末に控えがなくても、クラウドに控えたURLと合言葉があれば戻す
+      if (profile.driveConf && profile.driveConf.url && !getSetting('driveSyncUrl', '')) {
+        state.settings.driveSyncUrl = profile.driveConf.url;
+        state.settings.driveSyncKey = profile.driveConf.key || '';
+        rememberDriveConf();
+      }
       if (profile.lastFeedback !== undefined) state.feedbackHistory = mergeFeedbackHistory(state.feedbackHistory, normalizeFeedbackHistory(profile.lastFeedback));
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
@@ -4877,14 +4883,17 @@
   function writeProfile() {
     if (!cloudUser || !window.TetsuLogApp) return;
     var s = window.TetsuLogApp.getState();
-    setDoc(profileRef(), {
+    var data = {
       categories: s.categories,
       dict: s.dict,
       settings: s.settings,
       lastFeedback: s.feedbackHistory,
       myPage: s.myPage,
       dailyNotes: s.dailyNotes
-    }, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
+    };
+    // ドライブ送信のURLと合言葉は、空でないときだけ別に控える(空で上書きしない)
+    if (s.settings && s.settings.driveSyncUrl) data.driveConf = { url: s.settings.driveSyncUrl, key: s.settings.driveSyncKey || '' };
+    setDoc(profileRef(), data, { merge: true }).catch(function (e) { console.warn('[鉄ログ] profile sync failed', e); });
   }
 
   function writeEntry(entry) {
