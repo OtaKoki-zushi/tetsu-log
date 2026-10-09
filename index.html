@@ -1040,6 +1040,26 @@
     dailyNotes: 'tetsulog_daily_notes',
     inbody: 'tetsulog_inbody'
   };
+  // ドライブ送信のURLと合言葉は、設定とは別のキーにも控えておく。
+  // クラウド同期や設定の上書きで消えても、ここから自動で戻す。
+  var LS_DRIVE_CONF = 'tetsulogx_drive_conf'; // 書き出し(tetsulog_*)の対象外
+  function rememberDriveConf() {
+    var s = state && state.settings;
+    if (!s || !s.driveSyncUrl) return;
+    try { localStorage.setItem(LS_DRIVE_CONF, JSON.stringify({ url: s.driveSyncUrl, key: s.driveSyncKey || '' })); } catch (e) {}
+  }
+  function forgetDriveConf() {
+    try { localStorage.removeItem(LS_DRIVE_CONF); } catch (e) {}
+  }
+  function restoreDriveConf() {
+    if (!state || !state.settings) return;
+    var conf = null;
+    try { conf = JSON.parse(localStorage.getItem(LS_DRIVE_CONF) || 'null'); } catch (e) {}
+    if (!conf || !conf.url) { rememberDriveConf(); return; }
+    if (!state.settings.driveSyncUrl) state.settings.driveSyncUrl = conf.url;
+    if (!state.settings.driveSyncKey && state.settings.driveSyncUrl === conf.url) state.settings.driveSyncKey = conf.key || '';
+    rememberDriveConf();
+  }
 
   function loadJSON(key, fallback) {
     try {
@@ -1133,6 +1153,9 @@
     selectedDate: todayStr()
   };
   state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+  restoreDriveConf();
+  // ブラウザに「このアプリのデータは消さないで」と頼む(対応している環境のみ)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
 
   // cloudHooks is injected by the Firebase module script once a user signs in.
   // { writeEntry(entry), writeProfile() } — null while signed out / offline.
@@ -4259,6 +4282,7 @@
       driveSyncKey: $('driveSyncKeyInput').value.trim()
     };
     saveJSON(LS.settings, state.settings);
+    if (state.settings.driveSyncUrl) rememberDriveConf(); else forgetDriveConf();
     if (state.settings.driveSyncUrl) scheduleDriveSync('settings', 500);
     if (cloudHooks) cloudHooks.writeProfile();
     closeSettings();
@@ -4479,6 +4503,21 @@
       if (manual) showToast('オフラインのため送れませんでした');
       return Promise.resolve(false);
     }
+    // 記録が0件、または前回送った件数から急に半分以下に減ったときは、
+    // ドライブの記録を空で上書きしないように自動送信を止める。
+    var nowCount = (state.entries || []).length;
+    var prev = null;
+    try { prev = JSON.parse(localStorage.getItem(LS_DRIVE_LAST) || 'null'); } catch (e) {}
+    var suspicious = nowCount === 0 || (prev && prev.count >= 10 && nowCount < prev.count / 2);
+    if (suspicious) {
+      var why = nowCount === 0 ? 'この端末の記録が0件' : '記録が前回(' + prev.count + 'セット)から' + nowCount + 'セットに急に減った';
+      if (!manual) {
+        try { localStorage.setItem(LS_DRIVE_ERR, JSON.stringify({ at: Date.now(), msg: why + (nowCount === 0 ? 'のため' : 'ため') + '、ドライブの上書きを止めました' })); } catch (e) {}
+        renderDriveSyncStatus();
+        return Promise.resolve(false);
+      }
+      if (!window.confirm(why + 'です。このままドライブに送ると、ドライブの記録もこの内容で上書きされます。送りますか?')) return Promise.resolve(false);
+    }
     if (driveSyncSending) { driveSyncPending = true; return Promise.resolve(false); }
     driveSyncSending = true;
     var body = JSON.stringify(buildDrivePayload());
@@ -4558,6 +4597,7 @@
       saveJSON(LS.settings, state.settings);
       if (cloudHooks) cloudHooks.writeProfile();
     }
+    rememberDriveConf();
     sendToDrive('manual', true);
   });
   document.addEventListener('visibilitychange', function () {
@@ -4600,6 +4640,7 @@
     state.categories = loadJSON(LS.categories, DEFAULT_CATEGORIES.slice());
     state.dict = loadJSON(LS.dict, JSON.parse(JSON.stringify(DEFAULT_DICT)));
     state.settings = loadJSON(LS.settings, defaultSettings());
+    restoreDriveConf();
     state.feedbackHistory = loadFeedbackHistory();
     state.myPage = loadJSON(LS.myPage, JSON.parse(JSON.stringify(DEFAULT_MYPAGE)));
     state.dailyNotes = loadJSON(LS.dailyNotes, {});
@@ -4707,7 +4748,7 @@
     applyCloudProfile: function (profile) {
       if (profile.categories && profile.categories.length) state.categories = profile.categories;
       if (profile.dict) state.dict = profile.dict;
-      if (profile.settings) state.settings = profile.settings;
+      if (profile.settings) { state.settings = profile.settings; restoreDriveConf(); }
       if (profile.lastFeedback !== undefined) state.feedbackHistory = mergeFeedbackHistory(state.feedbackHistory, normalizeFeedbackHistory(profile.lastFeedback));
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
