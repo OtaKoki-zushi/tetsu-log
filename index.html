@@ -402,7 +402,9 @@
   .screen.active.slide-prev { animation: slideFromLeft 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
   @keyframes slideFromRight { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: none; } }
   @keyframes slideFromLeft { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .screen.active.slide-next, .screen.active.slide-prev { animation: none; } }
+  #dayDetailBody.slide-next { animation: slideFromRight 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  #dayDetailBody.slide-prev { animation: slideFromLeft 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @media (prefers-reduced-motion: reduce) { .screen.active.slide-next, .screen.active.slide-prev, #dayDetailBody.slide-next, #dayDetailBody.slide-prev { animation: none; } }
 
   .settings-overlay {
     position: fixed; inset: 0; background: var(--bg); z-index: 50;
@@ -2214,13 +2216,53 @@
     $('ddPrevDate').textContent = nb.prev ? formatDateLabelWithYear(nb.prev) : 'なし';
     $('ddNextDate').textContent = nb.next ? formatDateLabelWithYear(nb.next) : 'なし';
   }
-  ['ddPrevBtn', 'ddNextBtn'].forEach(function (id) {
-    $(id).addEventListener('click', function () {
-      if (!this.dataset.date) return;
-      openDayDetail(this.dataset.date);
-      $('dayDetailBody').scrollTop = 0;
-    });
-  });
+  // dir: 1 = 次の日(右から入る), -1 = 前の日(左から入る)
+  function moveDayDetail(dir) {
+    var dateStr = $(dir > 0 ? 'ddNextBtn' : 'ddPrevBtn').dataset.date;
+    if (!dateStr) return;
+    openDayDetail(dateStr);
+    var body = $('dayDetailBody');
+    body.scrollTop = 0;
+    body.classList.remove('slide-next', 'slide-prev');
+    void body.offsetWidth; // アニメーションを毎回やり直す
+    body.classList.add(dir > 0 ? 'slide-next' : 'slide-prev');
+  }
+  $('ddPrevBtn').addEventListener('click', function () { moveDayDetail(-1); });
+  $('ddNextBtn').addEventListener('click', function () { moveDayDetail(1); });
+
+  // 日別画面を左右にスワイプして前後のトレーニング日へ移る(左へ=次の日、右へ=前の日)。
+  // 入力欄・横スクロールする所の上や、画面端(ブラウザの「戻る」)では反応しない。
+  (function bindDayDetailSwipe() {
+    var overlay = $('dayDetailOverlay');
+    var sx = 0, sy = 0, st = 0, tracking = false;
+    function blocked(el) {
+      for (var n = el; n && n.nodeType === 1 && n !== overlay; n = n.parentElement) {
+        if (n.matches('input, textarea, select, .set-row, [data-no-day-swipe]')) return true;
+        if (n.scrollWidth > n.clientWidth + 2) {
+          var ox = getComputedStyle(n).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return true;
+        }
+      }
+      return false;
+    }
+    overlay.addEventListener('touchstart', function (ev) {
+      tracking = false;
+      if (ev.touches.length !== 1 || !openDayDetailDate) return;
+      if (blocked(ev.target)) return;
+      sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; st = Date.now();
+      if (sx < 24 || sx > window.innerWidth - 24) return;
+      tracking = true;
+    }, { passive: true });
+    overlay.addEventListener('touchend', function (ev) {
+      if (!tracking) return;
+      tracking = false;
+      var t = ev.changedTouches[0];
+      var dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st > 800) return;
+      moveDayDetail(dx < 0 ? 1 : -1);
+    }, { passive: true });
+    overlay.addEventListener('touchcancel', function () { tracking = false; }, { passive: true });
+  })();
 
   function openDayDetail(dateStr) {
     openDayDetailDate = dateStr;
