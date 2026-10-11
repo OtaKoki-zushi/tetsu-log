@@ -418,6 +418,11 @@
   .ge-set-idx { font-size: 12px; color: var(--text-muted); font-weight: 700; padding-bottom: 12px; }
   .ge-set-del { border: none; background: transparent; color: var(--text-faint); font-size: 20px; line-height: 1; padding: 0 4px 10px; cursor: pointer; align-self: end; }
   .ge-set-del:hover { color: var(--accent); }
+  /* 左右別入力(ダンベル・片腕ずつの種目) */
+  .lr-toggle { font-size: 12.5px; }
+  .ge-set-row .ge-r-w { grid-column: 2; }
+  .ge-set-row .ge-r-r { grid-column: 3; }
+  .lr-off .ge-r-w, .lr-off .ge-r-r, .lr-off .lr-only { display: none; }
   .ge-add-set { width: 100%; margin-top: 2px; border: 1px dashed var(--border); background: transparent; color: var(--text-muted); border-radius: 12px; padding: 11px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
   .ge-add-set:hover { border-color: var(--accent); color: var(--accent); }
   .inbody-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
@@ -555,9 +560,16 @@
           <datalist id="exerciseSuggestions"></datalist>
         </div>
 
-        <div class="field-trio two-col" id="trio-strength">
-          <div class="field"><label>重量 (kg)</label><input type="number" id="inputWeight" step="0.5" min="0" inputmode="decimal"></div>
-          <div class="field"><label>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
+        <div id="trio-strength" class="lr-off" style="display:grid; gap:8px;">
+          <label class="check-row lr-toggle"><input type="checkbox" id="inputLR"> 左右別に入力(ダンベル・片腕ずつの種目)</label>
+          <div class="field-trio two-col">
+            <div class="field"><label><span class="lr-only">左 </span>重量 (kg)</label><input type="number" id="inputWeight" step="0.5" min="0" inputmode="decimal"></div>
+            <div class="field"><label><span class="lr-only">左 </span>回数</label><input type="number" id="inputReps" min="1" inputmode="numeric"></div>
+          </div>
+          <div class="field-trio two-col lr-only">
+            <div class="field"><label>右 重量 (kg)</label><input type="number" id="inputWeightR" step="0.5" min="0" inputmode="decimal" placeholder="左と同じ"></div>
+            <div class="field"><label>右 回数</label><input type="number" id="inputRepsR" min="1" inputmode="numeric" placeholder="左と同じ"></div>
+          </div>
         </div>
 
         <div class="field-trio two-col" id="trio-cardio" style="display:none">
@@ -918,9 +930,16 @@
       <form id="editEntryForm">
         <div class="field"><label>種目名</label><input type="text" id="editName" autocomplete="off" list="exerciseSuggestions"></div>
         <div style="height:12px"></div>
-        <div class="field-trio two-col" id="editTrioStrength">
-          <div class="field"><label>重量 (kg)</label><input type="number" id="editWeight" step="0.5" min="0" inputmode="decimal"></div>
-          <div class="field"><label>回数</label><input type="number" id="editReps" min="1" inputmode="numeric"></div>
+        <div id="editTrioStrength" class="lr-off" style="display:grid; gap:8px;">
+          <label class="check-row lr-toggle"><input type="checkbox" id="editLR"> 左右別に入力</label>
+          <div class="field-trio two-col">
+            <div class="field"><label><span class="lr-only">左 </span>重量 (kg)</label><input type="number" id="editWeight" step="0.5" min="0" inputmode="decimal"></div>
+            <div class="field"><label><span class="lr-only">左 </span>回数</label><input type="number" id="editReps" min="1" inputmode="numeric"></div>
+          </div>
+          <div class="field-trio two-col lr-only">
+            <div class="field"><label>右 重量 (kg)</label><input type="number" id="editWeightR" step="0.5" min="0" inputmode="decimal" placeholder="左と同じ"></div>
+            <div class="field"><label>右 回数</label><input type="number" id="editRepsR" min="1" inputmode="numeric" placeholder="左と同じ"></div>
+          </div>
         </div>
         <div class="field-trio two-col" id="editTrioCardio" style="display:none">
           <div class="field"><label>時間 (分)</label><input type="number" id="editMinutes" min="1" inputmode="numeric"></div>
@@ -949,6 +968,7 @@
         </div>
         <div style="height:12px"></div>
         <div class="section-heading"><h3>各セット</h3></div>
+        <label class="check-row lr-toggle" id="groupEditLRRow" style="margin-bottom:10px;"><input type="checkbox" id="groupEditLR"> 左右別に入力(ダンベル・片腕ずつの種目)</label>
         <div id="groupEditSets"></div>
         <button type="button" class="ge-add-set" id="groupEditAddSet">＋ セットを追加</button>
         <div style="height:14px"></div>
@@ -1252,7 +1272,58 @@
   }
   function formatSetLabel(e) {
     if (e.minutes !== undefined) return e.minutes + '分' + (e.distance != null ? ' / ' + e.distance + 'km' : '');
-    return e.weight + 'kg × ' + e.reps + '回';
+    return strengthSetText(e);
+  }
+
+  // ---------------------------------------------------------------------
+  // 左右別(ダンベル・片腕ずつの種目)
+  // weight/reps が左、weightR/repsR が右。右が無ければ左と同じとみなす。
+  // lr が保存されていない以前の記録は種目名から判定する。
+  // ---------------------------------------------------------------------
+  var UNILATERAL_RE = /ダンベル|dumbbell|\bDB\b|ワンアーム|ワンハンド|片手|片腕|片足|片脚|one[\s-]?(arm|hand|leg)|single[\s-]?(arm|leg)|ブルガリアン|コンセントレーション/i;
+  function isUnilateralName(name) { return UNILATERAL_RE.test(name || ''); }
+  function isLREntry(e) {
+    if (!e || e.minutes !== undefined || e.weight == null) return false;
+    if (e.lr === true || e.lr === false) return e.lr;
+    return isUnilateralName(e.name);
+  }
+  function rightWeight(e) { return e.weightR != null ? e.weightR : e.weight; }
+  function rightReps(e) { return e.repsR != null ? e.repsR : e.reps; }
+  // 1件の負荷量(重量×回数)。左右別の種目は左+右の合計。
+  function entryVolume(e) {
+    if (e.weight == null) return 0;
+    var v = e.weight * e.reps;
+    if (isLREntry(e)) v += rightWeight(e) * rightReps(e);
+    return v * (e.sets || 1);
+  }
+  // 同じ種目の直近の記録で左右別を選んでいればそれに合わせ、無ければ名前から判定
+  function defaultLRForName(name) {
+    var latest = name ? latestEntryForExercise(name) : null;
+    if (latest && latest.minutes === undefined && (latest.lr === true || latest.lr === false)) return latest.lr;
+    return isUnilateralName(name);
+  }
+  function strengthSetText(e, compact) {
+    var x = compact ? '×' : ' × ';
+    if (!isLREntry(e)) return e.weight + 'kg' + x + e.reps + '回';
+    var wR = rightWeight(e), rR = rightReps(e);
+    if (wR === e.weight && rR === e.reps) return e.weight + 'kg' + x + e.reps + '回(左右)';
+    return '左' + e.weight + 'kg×' + e.reps + ' / 右' + wR + 'kg×' + rR;
+  }
+  // 左の入力に合わせて右を自動で埋める(右を自分で変えた後は追従しない)
+  function bindLRMirror(leftEl, rightEl) {
+    leftEl.addEventListener('input', function () { if (!rightEl.dataset.touched) rightEl.value = leftEl.value; });
+    rightEl.addEventListener('input', function () { rightEl.dataset.touched = rightEl.value !== '' ? '1' : ''; });
+  }
+  // 左右別の入力値を読む。右が空なら左と同じ値。
+  function readLRValues(wEl, rEl, wREl, rREl) {
+    var w = parseFloat(wEl.value), r = parseInt(rEl.value, 10);
+    var wR = parseFloat(wREl.value), rR = parseInt(rREl.value, 10);
+    return { weight: w, reps: r, weightR: isNaN(wR) ? w : wR, repsR: (!rR || rR <= 0) ? r : rR };
+  }
+  function applyLR(entry, lr, v) {
+    entry.lr = !!lr;
+    if (lr) { entry.weightR = v.weightR; entry.repsR = v.repsR; }
+    else { delete entry.weightR; delete entry.repsR; }
   }
   // Per-day best set for an exercise, oldest first. Strength days carry the
   // heaviest set (ties → more reps); cardio days the longest distance (or
@@ -1728,6 +1799,13 @@
     } else {
       $('editWeight').value = entry.weight;
       $('editReps').value = entry.reps;
+      var lr = isLREntry(entry);
+      $('editLR').checked = lr;
+      $('editTrioStrength').classList.toggle('lr-off', !lr);
+      $('editWeightR').value = rightWeight(entry);
+      $('editRepsR').value = rightReps(entry);
+      $('editWeightR').dataset.touched = rightWeight(entry) !== entry.weight ? '1' : '';
+      $('editRepsR').dataset.touched = rightReps(entry) !== entry.reps ? '1' : '';
     }
     $('editEntryTitle').textContent = entry.name + 'を編集';
     $('editEntryOverlay').classList.add('open');
@@ -1771,7 +1849,7 @@
       setsHtml = items.map(function (e, i) {
         var setsCount = e.sets || 1;
         return setRowWrapHtml(e, '<span class="set-idx">' + (i + 1) + 'セット目</span><span class="set-val">' +
-          e.weight + 'kg × ' + e.reps + '回' + (setsCount > 1 ? ' × ' + setsCount + 'セット' : '') + '</span>');
+          strengthSetText(e) + (setsCount > 1 ? ' × ' + setsCount + 'セット' : '') + '</span>');
       }).join('');
     }
 
@@ -2336,11 +2414,13 @@
         entry.minutes = minutes;
         if (!isNaN(distance) && distance > 0) entry.distance = distance;
       } else {
-        var weight = parseFloat($('inputWeight').value);
-        var reps = parseInt($('inputReps').value, 10);
-        if (isNaN(weight) || weight < 0) { alert('重量を入力してください'); return; }
-        if (!reps || reps <= 0) { alert('回数を入力してください'); return; }
-        entry.weight = weight; entry.reps = reps;
+        var v = readLRValues($('inputWeight'), $('inputReps'), $('inputWeightR'), $('inputRepsR'));
+        var lr = $('inputLR').checked;
+        if (isNaN(v.weight) || v.weight < 0) { alert(lr ? '左の重量を入力してください' : '重量を入力してください'); return; }
+        if (!v.reps || v.reps <= 0) { alert(lr ? '左の回数を入力してください' : '回数を入力してください'); return; }
+        if (lr && v.weightR < 0) { alert('右の重量を入力してください'); return; }
+        entry.weight = v.weight; entry.reps = v.reps;
+        applyLR(entry, lr, v);
       }
 
       // Check for a new estimated-1RM personal record before the entry is
@@ -2613,7 +2693,7 @@
     if (strengthEntries.length) {
       var byDateVol = {}, byDateRM = {}, byDateSets = {};
       strengthEntries.forEach(function (e) {
-        var vol = e.weight * e.reps * (e.sets || 1);
+        var vol = entryVolume(e);
         byDateVol[e.date] = (byDateVol[e.date] || 0) + vol;
         byDateRM[e.date] = Math.max(byDateRM[e.date] || 0, estimate1RM(e.weight, e.reps));
         byDateSets[e.date] = (byDateSets[e.date] || 0) + 1;
@@ -2709,7 +2789,7 @@
       state.entries.forEach(function (e) {
         if (e.weight == null) return;
         if (cutoff && new Date(e.date + 'T00:00:00') < cutoff) return;
-        total += e.weight * e.reps * (e.sets || 1);
+        total += entryVolume(e);
       });
       return total;
     }
@@ -2941,7 +3021,7 @@
 
     var volume = 0, cardioMin = 0;
     dayEntries.forEach(function (e) {
-      if (e.weight != null) volume += e.weight * e.reps * (e.sets || 1);
+      if (e.weight != null) volume += entryVolume(e);
       if (e.minutes != null) cardioMin += e.minutes;
     });
     // Rough estimate (no real metabolic data): ~0.024 kcal per kg lifted,
@@ -2951,7 +3031,7 @@
 
     var catVol = {};
     dayEntries.forEach(function (e) {
-      var v = (e.weight != null) ? (e.weight || 0.5) * e.reps * (e.sets || 1)
+      var v = (e.weight != null) ? (e.weight ? entryVolume(e) : 0.5 * e.reps * (e.sets || 1))
         : (e.minutes != null ? e.minutes * 60 : (e.reps || 1));
       catVol[e.category] = (catVol[e.category] || 0) + v;
     });
@@ -2982,6 +3062,7 @@
         subText = '合計 ' + items.reduce(function (s, e) { return s + e.reps * (e.sets || 1); }, 0) + '回';
       } else {
         setsLines = items.map(function (e) {
+          if (isLREntry(e)) return strengthSetText(e) + (e.sets && e.sets > 1 ? ' × ' + e.sets : '');
           return (e.weight || 0) + 'kg × ' + e.reps + (e.sets && e.sets > 1 ? ' × ' + e.sets : '');
         }).join('<br>');
         var best1RM = items.reduce(function (m, e) { return Math.max(m, e.weight ? estimate1RM(e.weight, e.reps) : 0); }, 0);
@@ -3029,11 +3110,15 @@
         del +
       '</div>';
     }
+    var wR = e.weight != null ? rightWeight(e) : '', rR = e.reps != null ? rightReps(e) : '';
+    var touchedW = (e.weight != null && wR !== e.weight) ? '1' : '', touchedR = (e.reps != null && rR !== e.reps) ? '1' : '';
     return '<div class="ge-set-row" data-entry-id="' + idAttr + '">' +
       '<span class="ge-set-idx">' + (i + 1) + '</span>' +
-      '<div class="field"><label>重量(kg)</label><input type="number" class="ge-weight" step="0.5" min="0" inputmode="decimal" value="' + (e.weight != null ? e.weight : '') + '"></div>' +
-      '<div class="field"><label>回数</label><input type="number" class="ge-reps" min="1" inputmode="numeric" value="' + (e.reps != null ? e.reps : '') + '"></div>' +
+      '<div class="field"><label><span class="lr-only">左 </span>重量(kg)</label><input type="number" class="ge-weight" step="0.5" min="0" inputmode="decimal" value="' + (e.weight != null ? e.weight : '') + '"></div>' +
+      '<div class="field"><label><span class="lr-only">左 </span>回数</label><input type="number" class="ge-reps" min="1" inputmode="numeric" value="' + (e.reps != null ? e.reps : '') + '"></div>' +
       del +
+      '<div class="field ge-r-w"><label>右 重量(kg)</label><input type="number" class="ge-weight-r" step="0.5" min="0" inputmode="decimal" placeholder="左と同じ" data-touched="' + touchedW + '" value="' + wR + '"></div>' +
+      '<div class="field ge-r-r"><label>右 回数</label><input type="number" class="ge-reps-r" min="1" inputmode="numeric" placeholder="左と同じ" data-touched="' + touchedR + '" value="' + rR + '"></div>' +
     '</div>';
   }
 
@@ -3082,6 +3167,10 @@
 
     // per-set inputs
     $('groupEditSets').innerHTML = items.map(function (e, i) { return geSetRowHtml(e, i, isCardio); }).join('');
+    var groupLR = !isCardio && items.some(isLREntry);
+    $('groupEditLRRow').style.display = isCardio ? 'none' : 'flex';
+    $('groupEditLR').checked = groupLR;
+    $('groupEditSets').classList.toggle('lr-off', !groupLR);
 
     $('groupEditOverlay').classList.add('open');
   }
@@ -3119,6 +3208,7 @@
     var activeCatPill = $('groupEditCategoryPills').querySelector('.pill.active');
     var newCategory = activeCatPill ? activeCatPill.dataset.cat : null;
     var isCardio = editingGroup.isCardio;
+    var groupLR = !isCardio && $('groupEditLR').checked;
 
     var rows = Array.prototype.slice.call($('groupEditSets').querySelectorAll('.ge-set-row'));
     if (!rows.length) { alert('セットを1つ以上残してください'); return; }
@@ -3133,11 +3223,12 @@
         if (!minutes || minutes <= 0) { alert((i + 1) + '番目の時間(分)を入力してください'); return; }
         parsed.push({ id: row.dataset.entryId, minutes: minutes, distance: (!isNaN(distance) && distance > 0) ? distance : null });
       } else {
-        var weight = parseFloat(row.querySelector('.ge-weight').value);
-        var reps = parseInt(row.querySelector('.ge-reps').value, 10);
-        if (isNaN(weight) || weight < 0) { alert((i + 1) + '番目の重量を入力してください'); return; }
-        if (!reps || reps <= 0) { alert((i + 1) + '番目の回数を入力してください'); return; }
-        parsed.push({ id: row.dataset.entryId, weight: weight, reps: reps });
+        var gv = readLRValues(row.querySelector('.ge-weight'), row.querySelector('.ge-reps'), row.querySelector('.ge-weight-r'), row.querySelector('.ge-reps-r'));
+        if (isNaN(gv.weight) || gv.weight < 0) { alert((i + 1) + '番目の重量を入力してください'); return; }
+        if (!gv.reps || gv.reps <= 0) { alert((i + 1) + '番目の回数を入力してください'); return; }
+        if (groupLR && gv.weightR < 0) { alert((i + 1) + '番目の右の重量を入力してください'); return; }
+        gv.id = row.dataset.entryId;
+        parsed.push(gv);
       }
     }
 
@@ -3159,6 +3250,7 @@
       } else {
         entry.weight = p.weight;
         entry.reps = p.reps;
+        applyLR(entry, groupLR, p);
         entry.category = newCategory || entry.category || editingGroup.category;
       }
       seen[entry.id] = true;
@@ -3235,7 +3327,7 @@
       if (!dayEntries.length) return;
       anyVisible = true;
 
-      var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + e.weight * e.reps * (e.sets || 1); }, 0);
+      var strengthVol = dayEntries.filter(function (e) { return e.weight != null; }).reduce(function (s, e) { return s + entryVolume(e); }, 0);
       var cardioMin = dayEntries.filter(function (e) { return e.minutes != null; }).reduce(function (s, e) { return s + e.minutes; }, 0);
       var cardioKm = dayEntries.filter(function (e) { return e.distance != null; }).reduce(function (s, e) { return s + e.distance; }, 0);
       var volParts = [];
@@ -3319,7 +3411,7 @@
     var lines = groupEntriesByName(strengthEntries).map(function (g) {
       var setsText = g.items.map(function (e) {
         var setsCount = e.sets || 1;
-        return e.weight + 'kg×' + e.reps + '回' + (setsCount > 1 ? '×' + setsCount + 'セット' : '');
+        return strengthSetText(e, true) + (setsCount > 1 ? '×' + setsCount + 'セット' : '');
       }).join(', ');
       var topWeight = Math.max.apply(null, g.items.map(function (e) { return e.weight; }));
       var prevTop = findPreviousTopWeight(g.name, today);
@@ -4208,12 +4300,14 @@
       if (!isNaN(distance) && distance > 0) entry.distance = distance;
       else delete entry.distance;
     } else {
-      var weight = parseFloat($('editWeight').value);
-      var reps = parseInt($('editReps').value, 10);
-      if (isNaN(weight) || weight < 0) { alert('重量を入力してください'); return; }
-      if (!reps || reps <= 0) { alert('回数を入力してください'); return; }
-      entry.weight = weight;
-      entry.reps = reps;
+      var ev2 = readLRValues($('editWeight'), $('editReps'), $('editWeightR'), $('editRepsR'));
+      var editLR = $('editLR').checked;
+      if (isNaN(ev2.weight) || ev2.weight < 0) { alert('重量を入力してください'); return; }
+      if (!ev2.reps || ev2.reps <= 0) { alert('回数を入力してください'); return; }
+      if (editLR && ev2.weightR < 0) { alert('右の重量を入力してください'); return; }
+      entry.weight = ev2.weight;
+      entry.reps = ev2.reps;
+      applyLR(entry, editLR, ev2);
     }
     if (cloudHooks) {
       cloudHooks.writeEntry(entry);
@@ -4434,6 +4528,38 @@
     });
   });
   $('addForm').addEventListener('submit', handleAddEntry);
+
+  // 左右別入力: 種目名から自動でオン/オフ、チェックで手動切り替え、左を入れると右も同じ値に
+  function setAddFormLR(on) {
+    $('inputLR').checked = on;
+    $('trio-strength').classList.toggle('lr-off', !on);
+  }
+  function syncAddFormLR() {
+    setAddFormLR(defaultLRForName(exerciseInput.value.trim()));
+    // 種目が変わったら右は左に合わせ直す
+    $('inputWeightR').dataset.touched = ''; $('inputRepsR').dataset.touched = '';
+    $('inputWeightR').value = $('inputWeight').value; $('inputRepsR').value = $('inputReps').value;
+  }
+  exerciseInput.addEventListener('input', syncAddFormLR);
+  $('inputLR').addEventListener('change', function () { setAddFormLR(this.checked); });
+  syncAddFormLR();
+  bindLRMirror($('inputWeight'), $('inputWeightR'));
+  bindLRMirror($('inputReps'), $('inputRepsR'));
+  $('editLR').addEventListener('change', function () { $('editTrioStrength').classList.toggle('lr-off', !this.checked); });
+  bindLRMirror($('editWeight'), $('editWeightR'));
+  bindLRMirror($('editReps'), $('editRepsR'));
+  $('groupEditLR').addEventListener('change', function () { $('groupEditSets').classList.toggle('lr-off', !this.checked); });
+  $('groupEditSets').addEventListener('input', function (ev) {
+    var t = ev.target, row = t.closest ? t.closest('.ge-set-row') : null;
+    if (!row) return;
+    var pairs = { 'ge-weight': 'ge-weight-r', 'ge-reps': 'ge-reps-r' };
+    if (pairs[t.className]) {
+      var r = row.querySelector('.' + pairs[t.className]);
+      if (r && !r.dataset.touched) r.value = t.value;
+    } else if (t.className === 'ge-weight-r' || t.className === 'ge-reps-r') {
+      t.dataset.touched = t.value !== '' ? '1' : '';
+    }
+  });
   $('entryDate').addEventListener('change', function () {
     state.selectedDate = $('entryDate').value || todayStr();
     renderTodayList();
