@@ -176,6 +176,11 @@
   .prev-hint .best-tag { color: var(--accent); font-weight: 800; }
   .country-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
   .country-badge .flag { font-size: 15px; }
+  /* Mac のデスクトップアプリ(Safari の「Dock に追加」など)だけで出すデジタル時計 */
+  .desk-clock { margin: 0 0 10px; font-variant-numeric: tabular-nums; }
+  .desk-clock-time { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: 0.02em; color: var(--text); }
+  .desk-clock-sec { font-size: 20px; font-weight: 700; color: var(--accent); margin-left: 4px; }
+  .desk-clock-date { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-top: 6px; }
   .country-stats { display: flex; flex-wrap: wrap; gap: 8px; }
   .country-stat { flex: 1 1 120px; display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
   .country-stat .flag { font-size: 24px; }
@@ -538,6 +543,10 @@
   <!-- ===== 記録 ===== -->
   <section class="screen active" id="screen-record">
     <div class="screen-header">
+      <div class="desk-clock" id="deskClock" style="display:none" aria-live="off">
+        <div class="desk-clock-time"><span id="deskClockHM">--:--</span><span class="desk-clock-sec" id="deskClockSec">--</span></div>
+        <div class="desk-clock-date" id="deskClockDate"></div>
+      </div>
       <h2 class="screen-title">今日のトレーニング</h2>
       <p class="screen-desc">種目名を入力すると部位を自動判定します。違っていれば下のピルで手動修正できます。</p>
       <button type="button" class="country-badge" id="countryBadge" title="タップで位置情報を再取得"><span class="flag">🌍</span><span id="countryBadgeText">場所を確認中…</span></button>
@@ -4870,6 +4879,27 @@
   var reloadLatestBtn = $('reloadLatestBtn');
   if (reloadLatestBtn) reloadLatestBtn.addEventListener('click', reloadLatest);
 
+  // Mac(タッチ非対応)で開いたときだけ、記録画面の上部にデジタル時計を出す。
+  // iPad も UA が Macintosh になるため、タッチ点数で除外する。
+  function isMacDesktop() {
+    return /Macintosh/.test(navigator.userAgent || '') && !(navigator.maxTouchPoints > 0);
+  }
+  function initDeskClock() {
+    if (!isMacDesktop()) return;
+    var weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function tick() {
+      var d = new Date();
+      $('deskClockHM').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
+      $('deskClockSec').textContent = pad(d.getSeconds());
+      $('deskClockDate').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日(' + weekdays[d.getDay()] + ')';
+    }
+    $('deskClock').style.display = 'block';
+    tick();
+    // 秒の切り替わりに合わせて更新する
+    setTimeout(function () { tick(); setInterval(tick, 1000); }, 1000 - (Date.now() % 1000));
+  }
+
   function init() {
     repairEntryDates();
     initDateInputs();
@@ -4882,6 +4912,7 @@
     renderMyPage();
     initInbodyView();
     renderCountryBadge();
+    initDeskClock();
     detectCountry(false);
     setTimeout(function () { checkForUpdate(true); }, 2500);
   }
