@@ -340,6 +340,14 @@
   .history-range .pill { flex: 1; text-align: center; justify-content: center; }
   .btn-danger { color: #F87171; border-color: rgba(248, 113, 113, 0.45); }
   /* exercise trend card (record screen, shown once a known exercise is typed) */
+  /* exercise-name autocomplete dropdown */
+  .name-suggest { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 20; display: none; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; max-height: 264px; overflow-y: auto; }
+  .name-suggest.open { display: flex; }
+  .name-suggest button { appearance: none; background: none; border: none; border-bottom: 1px solid var(--border); font: inherit; font-size: 14px; color: var(--text); text-align: left; padding: 11px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; -webkit-tap-highlight-color: transparent; }
+  .name-suggest button:last-child { border-bottom: none; }
+  .name-suggest button.active, .name-suggest button:active { background: var(--surface-2); }
+  .name-suggest mark { background: none; color: var(--accent); font-weight: 800; }
+  .name-suggest .ns-meta { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
   .exercise-trend { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--surface-2); }
   .trend-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
   .trend-icon { width: 46px; height: 62px; flex-shrink: 0; }
@@ -561,8 +569,7 @@
         </div>
         <div class="field">
           <label for="exerciseName">種目名</label>
-          <input type="text" id="exerciseName" placeholder="例）ベンチプレス" autocomplete="off" list="exerciseSuggestions">
-          <datalist id="exerciseSuggestions"></datalist>
+          <input type="text" id="exerciseName" placeholder="例）ベンチプレス" autocomplete="off">
         </div>
 
         <div id="trio-strength" class="lr-off" style="display:grid; gap:8px;">
@@ -949,7 +956,7 @@
     </div>
     <div class="settings-body">
       <form id="editEntryForm">
-        <div class="field"><label>種目名</label><input type="text" id="editName" autocomplete="off" list="exerciseSuggestions"></div>
+        <div class="field"><label>種目名</label><input type="text" id="editName" autocomplete="off"></div>
         <div style="height:12px"></div>
         <div id="editTrioStrength" class="lr-off" style="display:grid; gap:8px;">
           <label class="check-row lr-toggle"><input type="checkbox" id="editLR"> 左右別に入力</label>
@@ -981,7 +988,7 @@
     </div>
     <div class="settings-body">
       <form id="groupEditForm">
-        <div class="field"><label>種目名</label><input type="text" id="groupEditName" autocomplete="off" list="exerciseSuggestions"></div>
+        <div class="field"><label>種目名</label><input type="text" id="groupEditName" autocomplete="off"></div>
         <div style="height:12px"></div>
         <div class="field" id="groupEditCategoryField">
           <label>部位</label>
@@ -1684,7 +1691,6 @@
       state.dict[category].push(name);
       saveJSON(LS.dict, state.dict);
       if (cloudHooks) cloudHooks.writeProfile();
-      renderSuggestions();
     }
   }
 
@@ -2398,13 +2404,112 @@
       : '<p class="empty-note">まだ記録がありません。上のフォームから追加しましょう。</p>';
   }
 
-  function renderSuggestions() {
-    var dl = $('exerciseSuggestions');
-    var all = {};
-    Object.keys(state.dict).forEach(function (cat) {
-      (state.dict[cat] || []).forEach(function (w) { all[w] = true; });
+  // 種目名の予測変換。過去に記録した種目(よく使う順)と辞書の種目から、
+  // 入力中の文字を含むものを候補として出す。ひらがな/カタカナ・全角/半角・大文字/小文字は区別しない。
+  function normalizeForSearch(str) {
+    return String(str || '').normalize('NFKC').toLowerCase().replace(/[\u3041-\u3096]/g, function (ch) {
+      return String.fromCharCode(ch.charCodeAt(0) + 0x60);
+    }).replace(/\s+/g, '');
+  }
+
+  function exerciseNameCandidates() {
+    var info = {};
+    state.entries.forEach(function (e) {
+      if (!e || !e.name) return;
+      var c = info[e.name] || (info[e.name] = { name: e.name, count: 0, last: 0, category: e.category });
+      c.count++;
+      if ((e.ts || 0) >= c.last) { c.last = e.ts || 0; c.category = e.category; }
     });
-    dl.innerHTML = Object.keys(all).sort().map(function (w) { return '<option value="' + escapeHtml(w) + '"></option>'; }).join('');
+    Object.keys(state.dict).forEach(function (cat) {
+      (state.dict[cat] || []).forEach(function (w) {
+        if (!info[w]) info[w] = { name: w, count: 0, last: 0, category: cat };
+      });
+    });
+    return Object.keys(info).map(function (k) { return info[k]; });
+  }
+
+  function findExerciseSuggestions(query, limit) {
+    var q = normalizeForSearch(query);
+    if (!q) return [];
+    var hits = [];
+    exerciseNameCandidates().forEach(function (c) {
+      var n = normalizeForSearch(c.name);
+      var pos = n.indexOf(q);
+      if (pos === -1 || n === q) return;
+      hits.push({ c: c, prefix: pos === 0 });
+    });
+    hits.sort(function (a, b) {
+      if (a.prefix !== b.prefix) return a.prefix ? -1 : 1;
+      if (a.c.count !== b.c.count) return b.c.count - a.c.count;
+      if (a.c.last !== b.c.last) return b.c.last - a.c.last;
+      return a.c.name.length - b.c.name.length;
+    });
+    return hits.slice(0, limit || 8).map(function (h) { return h.c; });
+  }
+
+  // 入力文字に一致する部分を強調表示する(正規化前後で文字数が変わる場合は強調しない)。
+  function highlightMatch(name, query) {
+    var n = normalizeForSearch(name);
+    var q = normalizeForSearch(query);
+    var pos = n.indexOf(q);
+    if (pos === -1 || n.length !== name.replace(/\s+/g, '').length || /\s/.test(name)) return escapeHtml(name);
+    return escapeHtml(name.slice(0, pos)) + '<mark>' + escapeHtml(name.slice(pos, pos + q.length)) + '</mark>' + escapeHtml(name.slice(pos + q.length));
+  }
+
+  function attachNameSuggest(input) {
+    if (!input) return;
+    var box = document.createElement('div');
+    box.className = 'name-suggest';
+    box.setAttribute('role', 'listbox');
+    input.parentNode.style.position = 'relative';
+    input.parentNode.appendChild(box);
+    var items = [];
+    var activeIdx = -1;
+    var picking = false;
+
+    function close() { box.classList.remove('open'); box.innerHTML = ''; items = []; activeIdx = -1; }
+    function render() {
+      items = (!picking && document.activeElement === input) ? findExerciseSuggestions(input.value, 8) : [];
+      activeIdx = -1;
+      if (!items.length) { close(); return; }
+      box.innerHTML = items.map(function (c, i) {
+        var meta = c.count ? c.count + '回' : (c.category || '');
+        return '<button type="button" role="option" data-idx="' + i + '"><span>' + highlightMatch(c.name, input.value) + '</span><span class="ns-meta">' + escapeHtml(meta) + '</span></button>';
+      }).join('');
+      box.classList.add('open');
+    }
+    function pick(i) {
+      var c = items[i];
+      if (!c) return;
+      input.value = c.name;
+      close();
+      // 選んだ直後に、その名前を含む別の種目の候補が出直さないようにする。
+      picking = true;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      picking = false;
+    }
+    function setActive(i) {
+      activeIdx = i;
+      Array.prototype.forEach.call(box.children, function (el, j) { el.classList.toggle('active', j === i); });
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', function () { setTimeout(close, 150); });
+    input.addEventListener('keydown', function (ev) {
+      if (!items.length || ev.isComposing) return;
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive((activeIdx + 1) % items.length); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive((activeIdx - 1 + items.length) % items.length); }
+      else if (ev.key === 'Enter' && activeIdx >= 0) { ev.preventDefault(); pick(activeIdx); }
+      else if (ev.key === 'Escape') { close(); }
+    });
+    // mousedown を止めて入力欄のフォーカスを保ったまま、click で確定する
+    // (先に候補を消すと、タップが下にあるボタンへ抜けてしまうため)。
+    box.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    box.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('button[data-idx]');
+      if (btn) pick(Number(btn.dataset.idx));
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -4841,7 +4946,6 @@
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
-    renderSuggestions();
     selectCategory(state.categories[0], 'idle');
     renderHistory();
     renderFeedback();
@@ -4892,11 +4996,11 @@
   if (reloadLatestBtn) reloadLatestBtn.addEventListener('click', reloadLatest);
 
   function init() {
+    ['exerciseName', 'editName', 'groupEditName'].forEach(function (id) { attachNameSuggest($(id)); });
     repairEntryDates();
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
-    renderSuggestions();
     selectCategory(state.categories[0], 'idle');
     renderHistory();
     renderFeedback();
@@ -4950,8 +5054,7 @@
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
       renderCategoryPills();
       renderHistoryPills();
-      renderSuggestions();
-      if (!state.activeCategory || state.categories.indexOf(state.activeCategory) === -1) {
+        if (!state.activeCategory || state.categories.indexOf(state.activeCategory) === -1) {
         selectCategory(state.categories[0], 'idle');
       } else {
         renderTodayList();
