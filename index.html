@@ -5242,19 +5242,31 @@
       return;
     }
 
-    if (!snap.exists()) {
+    if (snap.exists()) {
+      // ログインしたとき、この端末にドライブ送信のURLと合言葉があって
+      // クラウドにまだ控えが無ければ、すぐクラウドに控える
+      // (設定を保存し直さなくても、別の端末やログインし直しで戻せるように)。
+      var cur = window.TetsuLogApp.getState().settings || {};
+      var saved = snap.data().driveConf;
+      if (cur.driveSyncUrl && !(saved && saved.url)) {
+        setDoc(ref, { driveConf: { url: cur.driveSyncUrl, key: cur.driveSyncKey || '' } }, { merge: true })
+          .catch(function (e) { console.warn('[鉄ログ] driveConf backup failed', e); });
+      }
+    } else {
       // first cloud login for this account: migrate whatever is in this
       // browser's local storage up to Firestore as the starting point.
       var local = window.TetsuLogApp.getState();
       try {
-        await setDoc(ref, {
+        var first = {
           categories: local.categories,
           dict: local.dict,
           settings: local.settings,
           lastFeedback: local.feedbackHistory,
           myPage: local.myPage,
           dailyNotes: local.dailyNotes
-        });
+        };
+        if (local.settings && local.settings.driveSyncUrl) first.driveConf = { url: local.settings.driveSyncUrl, key: local.settings.driveSyncKey || '' };
+        await setDoc(ref, first);
         var localEntries = local.entries.slice();
         for (var i = 0; i < localEntries.length; i++) {
           await setDoc(doc(entriesCol(), localEntries[i].id), localEntries[i]);
