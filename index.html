@@ -2607,6 +2607,7 @@
 
   // 日別画面を左右にスワイプして前後のトレーニング日へ移る(左へ=次の日、右へ=前の日)。
   // 入力欄・横スクロールする所の上や、画面端(ブラウザの「戻る」)では反応しない。
+  var SWIPE_BACK_EDGE = 40; // 日別画面で「戻る」スワイプを始められる左端の幅(px)
   (function bindDayDetailSwipe() {
     var overlay = $('dayDetailOverlay');
     var sx = 0, sy = 0, st = 0, tracking = false;
@@ -2625,7 +2626,8 @@
       if (ev.touches.length !== 1 || !openDayDetailDate) return;
       if (blocked(ev.target)) return;
       sx = ev.touches[0].clientX; sy = ev.touches[0].clientY; st = Date.now();
-      if (sx < 24 || sx > window.innerWidth - 24) return;
+      // 左端からのスワイプは「前の画面に戻る」(bindSwipeBack)に任せる
+      if (sx < SWIPE_BACK_EDGE || sx > window.innerWidth - 24) return;
       tracking = true;
     }, { passive: true });
     overlay.addEventListener('touchend', function (ev) {
@@ -5333,6 +5335,7 @@
   // ---------------------------------------------------------------------
   var TAB_ORDER = ['record', 'history', 'progress'];
   var currentScreen = 'record';
+  var lastTabScreen = 'record'; // マイページから戻る先
   function showScreen(name, dir) {
     document.querySelectorAll('.screen').forEach(function (el) {
       var on = el.id === 'screen-' + name;
@@ -5347,6 +5350,7 @@
     pill.dataset.i = String(i);
     if (i >= 0) pill.style.setProperty('--nav-i', i);
     currentScreen = name;
+    if (i >= 0) lastTabScreen = name;
   }
 
   // 画面を左右にスワイプして Record ⇄ History ⇄ Progress を移動する。
@@ -5392,6 +5396,93 @@
     });
   });
   $('mypageBtn').addEventListener('click', function () { showScreen('mypage'); });
+
+  // ---------------------------------------------------------------------
+  // 左から右へのスワイプで、前の画面に戻る。
+  // 詳細画面(種目のグラフ、日別、編集、設定など重なって開く画面)は閉じて下の画面へ、
+  // マイページは元のタブへ戻る。画面は指に合わせて右へずれ、3割以上ずらすか
+  // 素早く払うと戻る。日別画面は左右スワイプで日付を移るので、左端から始めたときだけ戻る。
+  // ---------------------------------------------------------------------
+  (function bindSwipeBack() {
+    var CLOSE_BTN = {
+      settingsOverlay: 'closeSettingsBtn', chartOverlay: 'closeChartBtn', dayDetailOverlay: 'closeDayDetailBtn',
+      editEntryOverlay: 'closeEditEntryBtn', groupEditOverlay: 'closeGroupEditBtn', inbodyPhotoOverlay: 'closeInbodyPhotoBtn',
+      rmCalcOverlay: 'closeRmCalcBtn', importOverlay: 'closeImportBtn'
+    };
+    function topOverlay() {
+      var open = Array.prototype.slice.call(document.querySelectorAll('.settings-overlay.open'));
+      if (!open.length) return null;
+      var z = function (el) { return parseInt(getComputedStyle(el).zIndex, 10) || 0; };
+      return open.reduce(function (top, el) { return z(el) >= z(top) ? el : top; }, open[0]);
+    }
+    function blocked(el, root) {
+      for (var n = el; n && n.nodeType === 1 && n !== root; n = n.parentElement) {
+        if (n.matches('input, textarea, select, .set-row, [data-no-swipe-back]')) return true;
+        if (n.scrollWidth > n.clientWidth + 2) {
+          var ox = getComputedStyle(n).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return true;
+        }
+      }
+      return false;
+    }
+    function resetStyle(el) {
+      el.style.transition = ''; el.style.transform = ''; el.style.boxShadow = ''; el.style.willChange = '';
+    }
+    var st = null;
+    document.addEventListener('touchstart', function (ev) {
+      st = null;
+      if (ev.touches.length !== 1) return;
+      var t = ev.touches[0];
+      var el, close, edgeOnly = false;
+      var ov = topOverlay();
+      if (ov) {
+        el = ov;
+        edgeOnly = ov.id === 'dayDetailOverlay';
+        close = function () { var b = $(CLOSE_BTN[ov.id]); if (b) b.click(); else ov.classList.remove('open'); };
+      } else if (currentScreen === 'mypage') {
+        el = $('screen-mypage');
+        close = function () { showScreen(lastTabScreen, -1); };
+      } else return;
+      if (!el.contains(ev.target)) return;
+      if (edgeOnly ? t.clientX > SWIPE_BACK_EDGE : blocked(ev.target, el)) return;
+      st = { x: t.clientX, y: t.clientY, t: Date.now(), el: el, close: close, drag: false, dead: false, dx: 0 };
+    }, { passive: true });
+    document.addEventListener('touchmove', function (ev) {
+      if (!st || st.dead) return;
+      var t = ev.touches[0];
+      var dx = t.clientX - st.x, dy = t.clientY - st.y;
+      if (!st.drag) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        if (dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+          st.drag = true;
+          st.el.style.transition = 'none';
+          st.el.style.willChange = 'transform';
+          st.el.style.boxShadow = '-14px 0 32px rgba(0, 0, 0, 0.55)';
+        } else { st.dead = true; return; }
+      }
+      if (ev.cancelable) ev.preventDefault();
+      st.dx = Math.max(0, dx);
+      st.el.style.transform = 'translateX(' + st.dx + 'px)';
+    }, { passive: false });
+    function finish() {
+      if (!st) return;
+      var s = st; st = null;
+      if (!s.drag) return;
+      var w = s.el.getBoundingClientRect().width || window.innerWidth;
+      var speed = s.dx / Math.max(1, Date.now() - s.t);
+      if (s.dx > w * 0.3 || (speed > 0.5 && s.dx > 40)) {
+        s.el.style.transition = 'transform 0.18s ease-out';
+        s.el.style.transform = 'translateX(' + w + 'px)';
+        setTimeout(function () { resetStyle(s.el); s.close(); }, 180);
+      } else {
+        s.el.style.transition = 'transform 0.18s ease-out';
+        s.el.style.transform = 'translateX(0)';
+        setTimeout(function () { resetStyle(s.el); }, 190);
+      }
+    }
+    document.addEventListener('touchend', finish, { passive: true });
+    document.addEventListener('touchcancel', finish, { passive: true });
+  })();
   $('sendRecordsBtn').addEventListener('click', function () {
     var btn = this;
     btn.disabled = true;
