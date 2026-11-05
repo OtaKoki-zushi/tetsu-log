@@ -551,7 +551,7 @@
   .review-cat-row:not(:last-child) { border-bottom: 1px dashed var(--border); }
   .review-cat-name { font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
   .review-cat-name .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-  .review-bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .review-bar { height: 10px; background: var(--surface-2); border-radius: 999px; }
   .review-bar i { display: block; height: 100%; border-radius: 999px; }
   .review-cat-val { text-align: right; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .review-cat-val small { display: block; font-size: 10px; color: var(--text-faint); font-weight: 700; }
@@ -574,6 +574,44 @@
   .review-empty { color: var(--text-faint); font-size: 12.5px; text-align: center; padding: 10px 0; }
   .review-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
   .review-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .review-legend .dash { display: inline-block; width: 14px; border-top: 2px dashed #FBBF24; margin-right: 4px; vertical-align: 2px; }
+  .review-legend .tick { display: inline-block; width: 2px; height: 11px; background: var(--text); margin-right: 5px; vertical-align: -1px; border-radius: 1px; }
+  .review-hl { display: flex; flex-direction: column; gap: 10px; }
+  .review-hl-row { display: flex; gap: 10px; align-items: flex-start; }
+  .review-hl-icon { width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .review-hl-title { font-size: 11px; color: var(--text-muted); font-weight: 700; }
+  .review-hl-title b { color: var(--text); }
+  .review-hl-body { font-size: 13px; line-height: 1.6; margin-top: 1px; }
+  .review-hl-body b { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .review-hl-body .up, .review-cat-val .up { color: var(--success); }
+  .review-cat-val .down { color: #F87171; }
+  .review-hl-body .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: 0; }
+  .review-detail { margin-top: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  .review-detail.hint { font-size: 11.5px; color: var(--text-faint); text-align: center; border-style: dashed; }
+  .review-detail-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; }
+  .review-detail-head span { font-weight: 800; color: #3E9BFF; font-variant-numeric: tabular-nums; }
+  .review-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .review-chip { font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; }
+  .review-chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+  .review-detail-ex { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .review-detail-ex div { display: flex; justify-content: space-between; gap: 8px; }
+  .review-detail-ex span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+  .review-detail-ex b { font-variant-numeric: tabular-nums; }
+  .review-detail-ex .more { color: var(--text-faint); font-size: 11px; }
+  .review-donut-wrap { display: flex; align-items: center; gap: 14px; }
+  .review-donut svg { display: block; }
+  .review-donut-legend { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .review-donut-legend div { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .review-donut-legend .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .review-donut-legend .nm { flex: 1; font-weight: 700; }
+  .review-donut-legend b { font-variant-numeric: tabular-nums; font-size: 15px; }
+  .review-sub-label { font-size: 11px; color: var(--text-faint); font-weight: 700; margin: 14px 0 2px; }
+  .review-bar { position: relative; overflow: visible; }
+  .review-bar i { position: relative; }
+  .review-bar s { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 1px; }
+  .review-ex-bar { height: 4px; background: var(--surface-2); border-radius: 999px; margin-top: 5px; overflow: hidden; }
+  .review-ex-bar i { display: block; height: 100%; border-radius: 999px; }
+  .review-pr { font-size: 10.5px; font-weight: 800; color: #FBBF24; background: rgba(251, 191, 36, 0.12); border-radius: 999px; padding: 2px 7px; margin-left: 4px; vertical-align: 1px; }
 </style>
 </head>
 <body>
@@ -1292,6 +1330,59 @@
     var pad = function (n) { return String(n).padStart(2, '0'); };
     return y + '-' + pad(mo) + '-' + pad(da);
   }
+  // ---------------------------------------------------------------------
+  // 種目名の統合(2026-11): 同じ種目なのに名前が揺れていたものを、
+  // 最後に使っていた名前(最新版)にそろえる。11/6 までの記録だけが対象で、
+  // それ以降に旧名で記録したものは書き換えない。何度実行しても結果は同じ。
+  // ---------------------------------------------------------------------
+  var NAME_MERGE_UNTIL = '2026-11-06';
+  var NAME_MERGE_GROUPS = [
+    ['ラッドプルダウン', ['ラットプルダウン', 'ラットプル']],
+    ['ラッドプルダウンナロー', ['ラットプルダウンナロー']],
+    ['シーテッドロウ', ['シーテッドロー', 'ケーブルシーテッドロウ', 'ロー', 'ロウロー']],
+    ['ダイバーシングシーテッドロウ', ['ダイバージングシーテッドロー']],
+    ['チンニング', ['懸垂']],
+    ['リアデルタ', ['リアデルト']],
+    ['ショルダープレス', ['ダンベルショルダープレス']],
+    ['アーノルドインクラインダンベルショルダープレス', ['インクラインダンベルショルダーアーノルドプレス']],
+    ['インクラインダンベルプレス', ['インラインダンベルプレス', 'ダンベルプレス(30)', 'ダンベルプレス(インクライン30°)']],
+    ['ダンベルプレス(80)', ['ダンベルプレス(80°インクライン)', 'ダンベルプレス(インクライン80°)']],
+    ['インクラインダンベルフライ', ['ダンベルフライ(30)', 'ダンベルフライ(30°インクライン)', 'ダンベルフライ(インクライン30°)']],
+    ['インクラインダンベルフライ45度', ['ダンベルフライ45度']],
+    ['スミスインクラインベンチプレス', ['インクラインスミス']],
+    ['ケーブルフライ', ['ケーブル', 'ケーブルフライ膝位置']],
+    ['スタンディングアームカール', ['アームカール']],
+    ['インクラインアームカール', ['アームカール45度座位']],
+    ['フレンチプレス', ['フレンチカール']]
+  ];
+  var NAME_MERGE_MAP = {};
+  NAME_MERGE_GROUPS.forEach(function (g) { g[1].forEach(function (old) { NAME_MERGE_MAP[old] = g[0]; }); });
+  function mergeExerciseNames() {
+    var changed = [];
+    state.entries.forEach(function (e) {
+      var to = NAME_MERGE_MAP[e.name];
+      if (to && e.date && e.date <= NAME_MERGE_UNTIL) { e.name = to; changed.push(e); }
+    });
+    // 予測候補(辞書)からも旧名を消し、最新版の名前を残す
+    var dictChanged = false;
+    Object.keys(state.dict || {}).forEach(function (cat) {
+      var list = state.dict[cat] || [];
+      var next = [];
+      list.forEach(function (w) {
+        var to = NAME_MERGE_MAP[w] || w;
+        if (to !== w) dictChanged = true;
+        if (next.indexOf(to) === -1) next.push(to);
+      });
+      state.dict[cat] = next;
+    });
+    if (dictChanged) {
+      saveJSON(LS.dict, state.dict);
+      if (cloudHooks && cloudHooks.writeProfile) cloudHooks.writeProfile();
+    }
+    if (!changed.length) return;
+    saveJSON(LS.entries, state.entries);
+    if (cloudHooks) changed.forEach(function (e) { cloudHooks.writeEntry(e); });
+  }
   // One-time repair pass for entries that slipped in with a non-canonical date
   // string (e.g. earlier AI imports before normalizeDateStr existed).
   function repairEntryDates() {
@@ -1436,6 +1527,7 @@
     var values = series.map(function (p) { return p.value; });
     var max = Math.max.apply(null, values), min = Math.min.apply(null, values);
     var range = (max - min) || (max || 1) * 0.2;
+    if (max === min) min = max - range / 2; // 値が全部同じなら線をまん中に
     var w = 320, h = opts.height || 150, padL = 12, padR = 12, padT = 18, padB = 18;
     var stepX = (w - padL - padR) / (series.length - 1);
     var pts = values.map(function (v, i) {
@@ -3268,11 +3360,13 @@
 
   // ---------------------------------------------------------------------
   // 月間・年間の振り返り(進捗画面)
-  // 選んだ月(または年)の総重量・日数・セット数・レップ数、総重量の推移、
-  // 部位別の総重量、種目の最大重量の推移、種目別ランキングをまとめて見せる。
-  // 前の月(前の年)と比べた増減も添える。
+  // 選んだ月(または年)のハイライト、総重量・日数・セット数・レップ数、
+  // 総重量の推移(棒をタップで内訳)、部位別の割合(円グラフ)と前期間との比較、
+  // 種目の最大重量の推移、種目別ランキングをまとめて見せる。
   // ---------------------------------------------------------------------
-  var review = { range: 'month', year: null, month: null, exercise: null, cat: 'すべて' };
+  var review = { range: 'month', year: null, month: null, exercise: null, cat: 'すべて', bucket: null, allEx: false };
+  var REVIEW_EX_LIMIT = 10;
+  var WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
   function reviewPad(n) { return String(n).padStart(2, '0'); }
   function reviewPeriod(range, year, month) {
     if (range === 'year') return { start: year + '-01-01', end: year + '-12-31', label: year + '年' };
@@ -3293,7 +3387,7 @@
     return isLREntry(e) ? Math.max(e.weight, rightWeight(e)) : e.weight;
   }
   function summarizeEntries(list) {
-    var s = { volume: 0, days: 0, sets: 0, reps: 0, cardioMin: 0, byCat: {}, byEx: {}, byDate: {} };
+    var s = { volume: 0, days: 0, sets: 0, reps: 0, cardioMin: 0, byCat: {}, byEx: {}, byDate: {}, byDateEx: {} };
     var days = {};
     list.forEach(function (e) {
       days[e.date] = true;
@@ -3304,6 +3398,8 @@
       c.volume += v; c.sets += n;
       var d = s.byDate[e.date] || (s.byDate[e.date] = {});
       d[e.category] = (d[e.category] || 0) + v;
+      var dx = s.byDateEx[e.date] || (s.byDateEx[e.date] = {});
+      dx[e.name] = (dx[e.name] || 0) + v;
       var x = s.byEx[e.name] || (s.byEx[e.name] = { name: e.name, category: e.category, volume: 0, sets: 0, reps: 0, maxWeight: null, best1RM: 0, days: {} });
       x.volume += v; x.sets += n; x.reps += reps; x.days[e.date] = true;
       var tw = entryTopWeight(e);
@@ -3315,10 +3411,21 @@
     s.days = Object.keys(days).length;
     return s;
   }
+  // 期間より前の、種目ごとの最高重量(自己ベスト更新の判定用)
+  function priorMaxWeights(beforeDate) {
+    var m = {};
+    state.entries.forEach(function (e) {
+      if (!e.date || e.date >= beforeDate || e.minutes != null) return;
+      var tw = entryTopWeight(e);
+      if (tw != null && tw > 0 && (m[e.name] == null || tw > m[e.name])) m[e.name] = tw;
+    });
+    return m;
+  }
   function shortVol(v) {
     if (v >= 1000) return (Math.round(v / 100) / 10) + 't';
     return Math.round(v) + 'kg';
   }
+  function roundKg(v) { return Math.round(v * 10) / 10; }
   function reviewDeltaHtml(cur, prev, prefix, unit) {
     if (!(prev > 0)) return '<div class="review-delta">' + prefix + ' 記録なし</div>';
     var diff = cur - prev;
@@ -3328,34 +3435,82 @@
     var abs = unit === 'kg' ? commaNum(Math.round(Math.abs(diff))) + 'kg' : Math.abs(Math.round(diff)) + (unit || '');
     return '<div class="review-delta ' + cls + '">' + prefix + ' ' + sign + abs + ' (' + (pct > 0 ? '+' : '') + pct + '%)</div>';
   }
-  // 部位ごとに色分けした積み上げ棒グラフ。buckets: [{ label, parts: {部位: kg}, total }]
+  function niceStep(x) {
+    if (!(x > 0)) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  // 部位ごとに色分けした積み上げ棒グラフ(目盛り・平均線つき、棒はタップできる)。
+  // buckets: [{ label, parts: {部位: kg}, total }]
   function buildStackedBarSvg(buckets, cats, opts) {
     opts = opts || {};
     var max = Math.max.apply(null, buckets.map(function (b) { return b.total; }));
     if (!(max > 0)) return null;
-    var w = 320, h = opts.height || 150, padL = 4, padR = 4, padT = 16, padB = 16;
+    var w = 320, h = opts.height || 170, padL = 30, padR = 6, padT = 16, padB = 18;
+    var step = niceStep(max / 3), top = Math.ceil(max / step) * step;
     var n = buckets.length, slot = (w - padL - padR) / n;
     var bw = Math.max(3, Math.min(18, slot * 0.66));
     var chartH = h - padT - padB;
-    var out = '<line x1="' + padL + '" y1="' + (h - padB) + '" x2="' + (w - padR) + '" y2="' + (h - padB) + '" stroke="var(--border)" stroke-width="1"/>';
+    var yOf = function (v) { return h - padB - v / top * chartH; };
+    var out = '';
+    for (var t = 0; t <= top + 1e-9; t += step) {
+      var gy = yOf(t).toFixed(1);
+      out += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (w - padR) + '" y2="' + gy + '" stroke="var(--border)" stroke-width="1"' + (t > 0 ? ' stroke-dasharray="2 3"' : '') + '/>';
+      out += '<text x="' + (padL - 4) + '" y="' + (yOf(t) + 3).toFixed(1) + '" text-anchor="end" class="bar-date-label">' + (t === 0 ? '0' : shortVol(t)) + '</text>';
+    }
+    var sel = opts.selected;
     buckets.forEach(function (b, i) {
       var cx = padL + slot * i + slot / 2;
       var x = cx - bw / 2, y = h - padB;
+      var dim = sel != null && sel !== i ? ' opacity="0.35"' : '';
       cats.forEach(function (c) {
         var v = b.parts[c] || 0;
         if (v <= 0) return;
-        var bh = v / max * chartH;
+        var bh = v / top * chartH;
         y -= bh;
-        out += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" fill="' + categoryColor(c) + '"/>';
+        out += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" fill="' + categoryColor(c) + '"' + dim + '/>';
       });
-      if (b.total > 0 && (opts.allValues || b.total === max)) {
-        out += '<text x="' + cx.toFixed(1) + '" y="' + (y - 3).toFixed(1) + '" text-anchor="middle" class="bar-value-label"' + (b.total === max ? ' style="fill:var(--text);font-weight:700"' : '') + '>' + shortVol(b.total) + '</text>';
+      if (b.total > 0 && (opts.allValues || b.total === max || sel === i)) {
+        out += '<text x="' + cx.toFixed(1) + '" y="' + (y - 3).toFixed(1) + '" text-anchor="middle" class="bar-value-label"' + (b.total === max || sel === i ? ' style="fill:var(--text);font-weight:700"' : '') + '>' + shortVol(b.total) + '</text>';
       }
-      if (!opts.showLabel || opts.showLabel(i)) {
-        out += '<text x="' + cx.toFixed(1) + '" y="' + (h - 4) + '" text-anchor="middle" class="bar-date-label">' + b.label + '</text>';
+      var nearSel = sel != null && sel !== i && Math.abs(sel - i) <= 2;
+      if (sel === i || (!nearSel && (!opts.showLabel || opts.showLabel(i)))) {
+        out += '<text x="' + cx.toFixed(1) + '" y="' + (h - 4) + '" text-anchor="middle" class="bar-date-label"' + (sel === i ? ' style="fill:var(--accent);font-weight:700"' : '') + '>' + b.label + '</text>';
       }
     });
+    // 平均線(記録のある日/月だけで平均)
+    var active = buckets.filter(function (b) { return b.total > 0; });
+    if (active.length >= 2) {
+      var avg = active.reduce(function (s, b) { return s + b.total; }, 0) / active.length;
+      var ay = yOf(avg).toFixed(1);
+      out += '<line x1="' + padL + '" y1="' + ay + '" x2="' + (w - padR) + '" y2="' + ay + '" stroke="#FBBF24" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.9"/>';
+      out += '<text x="' + (w - padR) + '" y="' + (yOf(avg) - 3).toFixed(1) + '" text-anchor="end" font-size="8.5" font-weight="700" fill="#FBBF24">平均 ' + shortVol(avg) + '</text>';
+    }
+    // タップ判定用の透明な当たり枠
+    buckets.forEach(function (b, i) {
+      if (!(b.total > 0)) return;
+      out += '<rect data-review-bucket="' + i + '" x="' + (padL + slot * i).toFixed(1) + '" y="' + padT + '" width="' + slot.toFixed(1) + '" height="' + chartH + '" fill="transparent" style="cursor:pointer"/>';
+    });
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; display:block;">' + out + '</svg>';
+  }
+  // 円グラフ(ドーナツ)。segments: [{ value, color }]
+  function buildDonutSvg(segments, centerTop, centerSub) {
+    var size = 140, r = 52, cx = size / 2, cy = size / 2, sw = 22;
+    var C = 2 * Math.PI * r;
+    var total = segments.reduce(function (s, x) { return s + x.value; }, 0);
+    var svg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--surface-2)" stroke-width="' + sw + '"/>';
+    var acc = 0;
+    segments.forEach(function (seg) {
+      if (!(seg.value > 0) || !(total > 0)) return;
+      var frac = seg.value / total, dash = frac * C;
+      svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + seg.color + '" stroke-width="' + sw +
+        '" stroke-dasharray="' + Math.max(0, dash - 1.2).toFixed(2) + ' ' + (C - Math.max(0, dash - 1.2)).toFixed(2) + '" stroke-dashoffset="' + (-acc * C).toFixed(2) +
+        '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+      acc += frac;
+    });
+    svg += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" font-size="19" font-weight="800" fill="var(--text)">' + centerTop + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 18) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text-faint)">' + centerSub + '</text>';
+    return '<svg viewBox="0 0 ' + size + ' ' + size + '" width="132" height="132" aria-hidden="true">' + svg + '</svg>';
   }
   function reviewCategoryOrder(byCat) {
     var cats = state.categories.slice();
@@ -3391,6 +3546,11 @@
     state.entries.forEach(function (e) { if (e.date && (!min || e.date < min)) min = e.date; });
     return min;
   }
+  function reviewBucketLabel(isYear, period, i) {
+    if (isYear) return (i + 1) + '月';
+    var ds = period.start.slice(0, 8) + reviewPad(i + 1);
+    return parseInt(period.start.slice(5, 7), 10) + '月' + (i + 1) + '日(' + WEEKDAY_JA[new Date(ds + 'T00:00:00').getDay()] + ')';
+  }
 
   function renderReview() {
     var area = $('reviewArea');
@@ -3406,38 +3566,30 @@
     var cur = summarizeEntries(entriesBetween(period.start, period.end));
     var prev = summarizeEntries(entriesBetween(prevPeriod.start, prevPeriod.end));
     var prevWord = isYear ? '前年比' : '前月比';
+    var prevName = isYear ? '前年' : '前月';
 
     var earliest = reviewEarliestDate();
     var canPrev = earliest && earliest < period.start;
     var canNext = isYear ? review.year < now.getFullYear()
       : (review.year < now.getFullYear() || (review.year === now.getFullYear() && review.month < now.getMonth()));
 
-    // --- header: 月間/年間 切替 + 期間送り + 主要な数字
+    // --- 日ごと(月間)/月ごと(年間)のバケツ
+    var buckets = [], bucketDates = [];
+    var nBuckets = isYear ? 12 : period.days;
+    for (var bi = 0; bi < nBuckets; bi++) { buckets.push({ label: String(bi + 1), parts: {}, total: 0 }); bucketDates.push([]); }
+    Object.keys(cur.byDate).forEach(function (d) {
+      var idx = isYear ? parseInt(d.slice(5, 7), 10) - 1 : parseInt(d.slice(8, 10), 10) - 1;
+      var b = buckets[idx];
+      if (!b) return;
+      bucketDates[idx].push(d);
+      Object.keys(cur.byDate[d]).forEach(function (c) { b.parts[c] = (b.parts[c] || 0) + cur.byDate[d][c]; b.total += cur.byDate[d][c]; });
+    });
+    var bestIdx = -1, bestTotal = 0;
+    buckets.forEach(function (b, i) { if (b.total > bestTotal) { bestTotal = b.total; bestIdx = i; } });
+    var activeBuckets = buckets.filter(function (b) { return b.total > 0; }).length;
+
     var extraMain = '';
-    var catsAll = reviewCategoryOrder(cur.byCat);
-    var buckets;
-    if (isYear) {
-      buckets = [];
-      for (var m = 0; m < 12; m++) buckets.push({ label: String(m + 1), parts: {}, total: 0 });
-      Object.keys(cur.byDate).forEach(function (d) {
-        var b = buckets[parseInt(d.slice(5, 7), 10) - 1];
-        Object.keys(cur.byDate[d]).forEach(function (c) { b.parts[c] = (b.parts[c] || 0) + cur.byDate[d][c]; });
-      });
-      var activeMonths = buckets.filter(function (b) { return Object.keys(b.parts).length; }).length;
-      var bestIdx = -1, bestTotal = 0;
-      buckets.forEach(function (b, i) {
-        b.total = Object.keys(b.parts).reduce(function (s, c) { return s + b.parts[c]; }, 0);
-        if (b.total > bestTotal) { bestTotal = b.total; bestIdx = i; }
-      });
-      if (activeMonths) extraMain = '<div class="review-delta">月平均 ' + commaNum(Math.round(cur.volume / activeMonths)) + 'kg' + (bestIdx >= 0 ? ' ・ 最多は' + (bestIdx + 1) + '月' : '') + '</div>';
-    } else {
-      buckets = [];
-      for (var day = 1; day <= period.days; day++) {
-        var ds = period.start.slice(0, 8) + reviewPad(day);
-        var parts = cur.byDate[ds] || {};
-        buckets.push({ label: String(day), parts: parts, total: Object.keys(parts).reduce(function (s, c) { return s + parts[c]; }, 0) });
-      }
-    }
+    if (isYear && activeBuckets) extraMain = '<div class="review-delta">月平均 ' + commaNum(Math.round(cur.volume / activeBuckets)) + 'kg</div>';
 
     var kpis =
       '<div class="review-kpi main"><div class="l">総重量(重量×回数の合計)</div>' +
@@ -3466,9 +3618,56 @@
 
     if (!cur.days) { area.innerHTML = html; return; }
 
-    // --- 総重量の推移(部位で絞り込める)
+    var exList = Object.keys(cur.byEx).map(function (k) { return cur.byEx[k]; })
+      .sort(function (a, b) { return b.volume - a.volume; });
+    var catsAll = reviewCategoryOrder(cur.byCat);
     var catsWithVol = catsAll.filter(function (c) { return cur.byCat[c] && cur.byCat[c].volume > 0; });
+    var catsSorted = catsWithVol.slice().sort(function (a, b) { return cur.byCat[b].volume - cur.byCat[a].volume; });
+
+    // --- ハイライト
+    var hl = [];
+    var prior = priorMaxWeights(period.start);
+    var prs = exList.filter(function (x) { return x.maxWeight != null && prior[x.name] != null && x.maxWeight > prior[x.name]; })
+      .map(function (x) { return { x: x, diff: roundKg(x.maxWeight - prior[x.name]) }; })
+      .sort(function (a, b) { return b.diff / prior[b.x.name] - a.diff / prior[a.x.name]; });
+    if (prs.length) {
+      hl.push(['🏆', '自己ベスト更新 <b>' + prs.length + '種目</b>', prs.slice(0, 3).map(function (p) {
+        return escapeHtml(p.x.name) + ' <b>' + p.x.maxWeight + 'kg</b> <span class="up">(+' + p.diff + ')</span>';
+      }).join('<br>')]);
+    }
+    var growth = exList.filter(function (x) { return x.maxWeight != null && prev.byEx[x.name] && prev.byEx[x.name].maxWeight != null; })
+      .map(function (x) { return { x: x, diff: roundKg(x.maxWeight - prev.byEx[x.name].maxWeight) }; })
+      .filter(function (g) { return g.diff > 0; })
+      .sort(function (a, b) { return b.diff / prev.byEx[b.x.name].maxWeight - a.diff / prev.byEx[a.x.name].maxWeight; });
+    if (growth.length) {
+      var g0 = growth[0];
+      hl.push(['📈', prevName + 'から一番伸びた種目', escapeHtml(g0.x.name) + ' ' + prev.byEx[g0.x.name].maxWeight + ' → <b>' + g0.x.maxWeight + 'kg</b> <span class="up">(+' + g0.diff + ')</span>']);
+    }
+    if (catsSorted.length) {
+      var topCat = catsSorted[0];
+      hl.push(['💪', '一番鍛えた部位', '<span class="dot" style="background:' + categoryColor(topCat) + '"></span><b>' + escapeHtml(topCat) + '</b> 総重量の' + Math.round(cur.byCat[topCat].volume / cur.volume * 100) + '%' +
+        (catsSorted.length > 1 ? ' ・ 少なめ: ' + escapeHtml(catsSorted[catsSorted.length - 1]) + ' ' + Math.round(cur.byCat[catsSorted[catsSorted.length - 1]].volume / cur.volume * 100) + '%' : '')]);
+    }
+    if (bestIdx >= 0) {
+      hl.push(['🔥', isYear ? '一番重量を扱った月' : '一番重量を扱った日', '<b>' + reviewBucketLabel(isYear, period, bestIdx) + '</b> ' + commaNum(Math.round(bestTotal)) + 'kg']);
+    }
+    // 週あたりの頻度(今の月/年は今日までの日数で割る)
+    var todayKey = todayStr();
+    var spanEnd = period.end < todayKey ? period.end : todayKey;
+    var spanDays = Math.max(1, Math.round((new Date(spanEnd + 'T00:00:00') - new Date(period.start + 'T00:00:00')) / 86400000) + 1);
+    var perWeek = Math.round(cur.days / (spanDays / 7) * 10) / 10;
+    hl.push(['📅', 'トレーニング頻度', '週に<b>' + perWeek + '日</b>' + (prev.days ? '(' + prevName + ' ' + prev.days + '日 → 今回 ' + cur.days + '日)' : '')]);
+    var newEx = exList.filter(function (x) { return prior[x.name] == null && x.maxWeight != null; });
+    if (newEx.length) {
+      hl.push(['🆕', '新しく始めた種目 ' + newEx.length + 'つ', newEx.slice(0, 3).map(function (x) { return escapeHtml(x.name); }).join('、') + (newEx.length > 3 ? ' ほか' : '')]);
+    }
+    html += '<div class="card"><span class="card-label">✨ ' + (isYear ? '今年' : 'この月') + 'のハイライト</span><div class="review-hl">' + hl.map(function (h) {
+      return '<div class="review-hl-row"><div class="review-hl-icon">' + h[0] + '</div><div><div class="review-hl-title">' + h[1] + '</div><div class="review-hl-body">' + h[2] + '</div></div></div>';
+    }).join('') + '</div></div>';
+
+    // --- 総重量の推移(部位で絞り込める、棒をタップで内訳)
     if (review.cat !== 'すべて' && catsWithVol.indexOf(review.cat) === -1) review.cat = 'すべて';
+    if (review.bucket != null && !(buckets[review.bucket] && buckets[review.bucket].total > 0)) review.bucket = null;
     var chartCats = review.cat === 'すべて' ? catsAll : [review.cat];
     var chartBuckets = buckets.map(function (b) {
       var parts = {};
@@ -3476,42 +3675,74 @@
       return { label: b.label, parts: parts, total: Object.keys(parts).reduce(function (s, c) { return s + parts[c]; }, 0) };
     });
     var barSvg = buildStackedBarSvg(chartBuckets, chartCats, isYear
-      ? { allValues: true }
-      : { showLabel: function (i) { return i === 0 || (i + 1) % 5 === 0 || i === chartBuckets.length - 1; } });
+      ? { allValues: true, selected: review.bucket }
+      : { selected: review.bucket, showLabel: function (i) { var n = chartBuckets.length; return i === 0 || ((i + 1) % 5 === 0 && n - 1 - i > 2) || i === n - 1; } });
     if (catsWithVol.length) {
+      var detail;
+      if (review.bucket != null) {
+        var bk = buckets[review.bucket];
+        var exVol = {};
+        bucketDates[review.bucket].forEach(function (d) {
+          var m = cur.byDateEx[d] || {};
+          Object.keys(m).forEach(function (n) { exVol[n] = (exVol[n] || 0) + m[n]; });
+        });
+        var exTop = Object.keys(exVol).filter(function (n) { return exVol[n] > 0; }).sort(function (a, b) { return exVol[b] - exVol[a]; });
+        detail = '<div class="review-detail">' +
+          '<div class="review-detail-head"><b>' + reviewBucketLabel(isYear, period, review.bucket) + '</b><span>' + commaNum(Math.round(bk.total)) + 'kg</span></div>' +
+          '<div class="review-chips">' + catsAll.filter(function (c) { return bk.parts[c] > 0; }).map(function (c) {
+            return '<span class="review-chip"><span class="dot" style="background:' + categoryColor(c) + '"></span>' + escapeHtml(c) + ' ' + commaNum(Math.round(bk.parts[c])) + 'kg (' + Math.round(bk.parts[c] / bk.total * 100) + '%)</span>';
+          }).join('') + '</div>' +
+          (exTop.length ? '<div class="review-detail-ex">' + exTop.slice(0, 5).map(function (n) {
+            return '<div><span>' + escapeHtml(n) + '</span><b>' + commaNum(Math.round(exVol[n])) + 'kg</b></div>';
+          }).join('') + (exTop.length > 5 ? '<div class="more">ほか' + (exTop.length - 5) + '種目</div>' : '') + '</div>' : '') +
+        '</div>';
+      } else {
+        detail = '<div class="review-detail hint">👆 棒をタップすると、その' + (isYear ? '月' : '日') + 'の部位・種目ごとの内訳が出ます</div>';
+      }
       html += '<div class="card"><span class="card-label">' + (isYear ? '月ごとの総重量' : '日ごとの総重量') + (review.cat !== 'すべて' ? '(' + escapeHtml(review.cat) + ')' : '') + '</span>' +
         '<div class="pillrow review-pills">' + ['すべて'].concat(catsWithVol).map(function (c) {
           return '<button type="button" class="pill' + (review.cat === c ? ' active' : '') + '" data-review-cat="' + escapeHtml(c) + '">' + escapeHtml(c) + '</button>';
         }).join('') + '</div>' +
         (barSvg || '<div class="review-empty">この部位の記録はありません</div>') +
-        (review.cat === 'すべて' ? '<div class="review-legend">' + catsWithVol.map(function (c) {
+        '<div class="review-legend">' + (review.cat === 'すべて' ? catsWithVol.map(function (c) {
           return '<span><span class="dot" style="background:' + categoryColor(c) + '"></span>' + escapeHtml(c) + '</span>';
-        }).join('') + '</div>' : '') +
-        '<div class="trend-caption" style="margin-bottom:0">' + (isYear ? '横軸は月' : '横軸は日付') + '</div>' +
+        }).join('') : '') + '<span><span class="dash"></span>平均</span></div>' +
+        detail +
       '</div>';
 
-      // --- 部位別の総重量
-      var catsSorted = catsWithVol.slice().sort(function (a, b) { return cur.byCat[b].volume - cur.byCat[a].volume; });
-      var maxCat = cur.byCat[catsSorted[0]].volume;
-      html += '<div class="card"><span class="card-label">部位別の総重量</span>' + catsSorted.map(function (c) {
-        var cv = cur.byCat[c], pv = prev.byCat[c] ? prev.byCat[c].volume : 0;
-        var share = Math.round(cv.volume / cur.volume * 100);
-        var delta = '';
-        if (pv > 0) {
-          var pct = Math.round((cv.volume - pv) / pv * 100);
-          delta = ' ・ <span class="review-delta ' + (pct > 0 ? 'up' : (pct < 0 ? 'down' : '')) + '" style="display:inline">' + (pct > 0 ? '▲' : (pct < 0 ? '▼' : '±')) + Math.abs(pct) + '%</span>';
-        }
-        return '<div class="review-cat-row">' +
-          '<div class="review-cat-name"><span class="dot" style="background:' + categoryColor(c) + '"></span>' + escapeHtml(c) + '</div>' +
-          '<div class="review-bar"><i style="width:' + Math.max(2, cv.volume / maxCat * 100).toFixed(1) + '%; background:' + categoryColor(c) + '"></i></div>' +
-          '<div class="review-cat-val">' + commaNum(Math.round(cv.volume)) + 'kg<small>' + share + '% ・ ' + cv.sets + 'セット' + delta + '</small></div>' +
-        '</div>';
-      }).join('') + '<div class="trend-caption" style="margin:8px 0 0">%は' + prevWord + '</div></div>';
+      // --- 部位別の総重量: 円グラフ + 前の期間との比較
+      var donut = buildDonutSvg(catsSorted.map(function (c) { return { value: cur.byCat[c].volume, color: categoryColor(c) }; }),
+        shortVol(cur.volume), '総重量');
+      var scaleMax = 0;
+      catsSorted.forEach(function (c) {
+        scaleMax = Math.max(scaleMax, cur.byCat[c].volume, prev.byCat[c] ? prev.byCat[c].volume : 0);
+      });
+      html += '<div class="card"><span class="card-label">部位別の総重量</span>' +
+        '<div class="review-donut-wrap"><div class="review-donut">' + donut + '</div><div class="review-donut-legend">' + catsSorted.map(function (c) {
+          return '<div><span class="dot" style="background:' + categoryColor(c) + '"></span><span class="nm">' + escapeHtml(c) + '</span><b>' + Math.round(cur.byCat[c].volume / cur.volume * 100) + '%</b></div>';
+        }).join('') + '</div></div>' +
+        '<div class="review-sub-label">' + prevName + 'との比較</div>' +
+        catsSorted.map(function (c) {
+          var cv = cur.byCat[c], pv = prev.byCat[c] ? prev.byCat[c].volume : 0;
+          var delta = '';
+          if (pv > 0) {
+            var pct = Math.round((cv.volume - pv) / pv * 100);
+            delta = ' ・ <span class="' + (pct > 0 ? 'up' : (pct < 0 ? 'down' : '')) + '">' + (pct > 0 ? '▲' : (pct < 0 ? '▼' : '±')) + Math.abs(pct) + '%</span>';
+          } else {
+            delta = ' ・ <span>' + prevName + 'なし</span>';
+          }
+          return '<div class="review-cat-row">' +
+            '<div class="review-cat-name"><span class="dot" style="background:' + categoryColor(c) + '"></span>' + escapeHtml(c) + '</div>' +
+            '<div class="review-bar"><i style="width:' + Math.max(2, cv.volume / scaleMax * 100).toFixed(1) + '%; background:' + categoryColor(c) + '"></i>' +
+              (pv > 0 ? '<s style="left:' + Math.min(99.5, pv / scaleMax * 100).toFixed(1) + '%"></s>' : '') + '</div>' +
+            '<div class="review-cat-val">' + commaNum(Math.round(cv.volume)) + 'kg<small>' + cv.sets + 'セット' + delta + '</small></div>' +
+          '</div>';
+        }).join('') +
+        '<div class="review-legend" style="justify-content:center"><span><span class="tick"></span>' + prevName + 'の総重量</span></div>' +
+      '</div>';
     }
 
     // --- 種目の重量推移
-    var exList = Object.keys(cur.byEx).map(function (k) { return cur.byEx[k]; })
-      .sort(function (a, b) { return b.volume - a.volume; });
     var weighted = exList.filter(function (x) { return x.maxWeight != null; });
     var selName = reviewDefaultExercise(weighted);
     if (selName) {
@@ -3523,20 +3754,21 @@
         : { height: 150, labels: series.length <= 10 ? 'all' : 'few' });
       var prevMax = prev.byEx[selName] ? prev.byEx[selName].maxWeight : null;
       var first = series.length ? series[0].value : null, last = series.length ? series[series.length - 1].value : null;
-      var growth = (series.length >= 2) ? Math.round((last - first) * 10) / 10 : null;
+      var grow = (series.length >= 2) ? roundKg(last - first) : null;
+      var isPR = prior[selName] != null && sx.maxWeight > prior[selName];
       html += '<div class="card"><span class="card-label">種目の重量推移</span>' +
         '<div class="pillrow review-pills">' + weighted.map(function (x) {
           return '<button type="button" class="pill' + (x.name === selName ? ' active' : '') + '" data-review-ex="' + escapeHtml(x.name) + '">' + escapeHtml(x.name) + '</button>';
         }).join('') + '</div>' +
         '<div class="trend-head"><div class="trend-icon">' + exerciseIconSvg(selName, sx.category) + '</div><div>' +
-          '<div class="trend-title">' + escapeHtml(selName) + '</div>' + muscleTextHtml(musclesForExercise(selName, sx.category)) + '</div></div>' +
+          '<div class="trend-title">' + escapeHtml(selName) + (isPR ? ' <span class="review-pr">🏆 自己ベスト更新</span>' : '') + '</div>' + muscleTextHtml(musclesForExercise(selName, sx.category)) + '</div></div>' +
         (trendSvg
           ? trendSvg + '<div class="trend-caption">' + (isYear ? '月ごと' : '日ごと') + 'の最大重量(kg) ・ 🟡 = この期間の最高</div>'
           : '<div class="review-empty">グラフは' + (isYear ? '2か月' : '2日') + '以上の記録で表示されます</div>') +
         '<div class="review-trend-stats">' +
           '<div class="yr-stat"><div class="n">' + sx.maxWeight + '<span>kg</span></div><div class="l">期間の最高</div></div>' +
-          '<div class="yr-stat"><div class="n">' + (prevMax != null ? prevMax + '<span>kg</span>' : '—') + '</div><div class="l">' + (isYear ? '前年' : '前月') + 'の最高</div></div>' +
-          '<div class="yr-stat"><div class="n">' + (growth != null ? (growth > 0 ? '+' : '') + growth + '<span>kg</span>' : '—') + '</div><div class="l">期間内の伸び</div></div>' +
+          '<div class="yr-stat"><div class="n">' + (prevMax != null ? prevMax + '<span>kg</span>' : '—') + '</div><div class="l">' + prevName + 'の最高</div></div>' +
+          '<div class="yr-stat"><div class="n">' + (grow != null ? (grow > 0 ? '+' : '') + grow + '<span>kg</span>' : '—') + '</div><div class="l">期間内の伸び</div></div>' +
         '</div>' +
         '<div class="review-trend-stats">' +
           '<div class="yr-stat"><div class="n">' + Math.round(sx.best1RM) + '<span>kg</span></div><div class="l">推定1RM</div></div>' +
@@ -3547,15 +3779,17 @@
       '</div>';
     }
 
-    // --- 種目別ランキング(総重量順)
+    // --- 種目別ランキング(総重量順、横棒つき)
     if (exList.length) {
-      html += '<div class="card"><span class="card-label">種目別(総重量順)</span><div>' + exList.map(function (x, i) {
+      var exMax = exList[0].volume || 1;
+      var shownEx = review.allEx ? exList : exList.slice(0, REVIEW_EX_LIMIT);
+      html += '<div class="card"><span class="card-label">種目別(総重量順)</span><div>' + shownEx.map(function (x, i) {
         var pm = prev.byEx[x.name] ? prev.byEx[x.name].maxWeight : null;
         var maxLine = '';
         if (x.maxWeight != null) {
           var cls = '', mark = '';
           if (pm != null) {
-            var d = Math.round((x.maxWeight - pm) * 10) / 10;
+            var d = roundKg(x.maxWeight - pm);
             cls = d > 0 ? 'up' : (d < 0 ? 'down' : '');
             mark = d > 0 ? ' ▲' + d : (d < 0 ? ' ▼' + Math.abs(d) : ' ±0');
           }
@@ -3563,13 +3797,17 @@
         } else {
           maxLine = '<small>' + commaNum(x.reps) + '回</small>';
         }
+        var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
         return '<div class="review-ex-row' + (x.name === selName ? ' selected' : '') + '"' + (x.maxWeight != null ? ' data-review-ex="' + escapeHtml(x.name) + '"' : '') + '>' +
-          '<div class="review-ex-rank">' + (i + 1) + '</div>' +
-          '<div style="min-width:0"><div class="review-ex-name">' + escapeHtml(x.name) + '</div>' +
-            '<div class="review-ex-sub">' + escapeHtml(x.category || '') + ' ・ ' + x.sets + 'セット ・ ' + Object.keys(x.days).length + '日</div></div>' +
+          '<div class="review-ex-rank">' + medal + '</div>' +
+          '<div style="min-width:0"><div class="review-ex-name">' + escapeHtml(x.name) + (prior[x.name] != null && x.maxWeight > prior[x.name] ? ' 🏆' : '') + '</div>' +
+            '<div class="review-ex-sub">' + escapeHtml(x.category || '') + ' ・ ' + x.sets + 'セット ・ ' + Object.keys(x.days).length + '日</div>' +
+            '<div class="review-ex-bar"><i style="width:' + Math.max(2, x.volume / exMax * 100).toFixed(1) + '%; background:' + categoryColor(x.category) + '"></i></div></div>' +
           '<div class="review-ex-val">' + commaNum(Math.round(x.volume)) + 'kg' + maxLine + '</div>' +
         '</div>';
-      }).join('') + '</div><div class="trend-caption" style="margin:8px 0 0">▲▼は' + (isYear ? '前年' : '前月') + 'の最高重量との差(kg) ・ タップで上のグラフに表示</div></div>';
+      }).join('') + '</div>' +
+        (exList.length > REVIEW_EX_LIMIT ? '<button type="button" class="btn btn-outline trend-more" data-review-allex="1">' + (review.allEx ? '上位' + REVIEW_EX_LIMIT + '種目だけ表示' : 'すべて表示(' + exList.length + '種目)') + '</button>' : '') +
+        '<div class="trend-caption" style="margin:8px 0 0">▲▼は' + prevName + 'の最高重量との差(kg) ・ 🏆 = 自己ベスト更新 ・ タップで上のグラフに表示</div></div>';
     }
 
     area.innerHTML = html;
@@ -3583,21 +3821,32 @@
   }
 
   $('reviewArea').addEventListener('click', function (ev) {
+    var bar = ev.target.closest('[data-review-bucket]');
+    if (bar) {
+      var i = parseInt(bar.getAttribute('data-review-bucket'), 10);
+      review.bucket = review.bucket === i ? null : i;
+      renderReview();
+      return;
+    }
     var t = ev.target.closest('button, [data-review-ex]');
     if (!t) return;
     if (t.classList.contains('review-open-chart')) { openChart(t.dataset.exercise); return; }
     if (t.dataset.reviewRange) {
       if (review.range === t.dataset.reviewRange) return;
       review.range = t.dataset.reviewRange;
+      review.bucket = null;
       if (review.range === 'month' && review.year !== new Date().getFullYear()) review.month = 11;
     } else if (t.dataset.reviewNav) {
       var dir = parseInt(t.dataset.reviewNav, 10);
+      review.bucket = null;
       if (review.range === 'year') review.year += dir;
       else {
         var m = review.month + dir;
         review.year += Math.floor(m / 12);
         review.month = ((m % 12) + 12) % 12;
       }
+    } else if (t.dataset.reviewAllex) {
+      review.allEx = !review.allEx;
     } else if (t.dataset.reviewCat) {
       review.cat = t.dataset.reviewCat;
     } else if (t.dataset.reviewEx) {
@@ -5334,6 +5583,7 @@
     state.activeCategory = null;
     state.manualOverride = false;
     repairEntryDates();
+    mergeExerciseNames();
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
@@ -5389,6 +5639,7 @@
   function init() {
     ['exerciseName', 'editName', 'groupEditName'].forEach(function (id) { attachNameSuggest($(id)); });
     repairEntryDates();
+    mergeExerciseNames();
     initDateInputs();
     renderCategoryPills();
     renderHistoryPills();
@@ -5424,6 +5675,7 @@
     applyCloudEntries: function (list) {
       state.entries = list;
       repairEntryDates();
+      mergeExerciseNames();
       renderTodayList();
       renderHistory();
       refreshDayDetailIfOpen();
@@ -5443,6 +5695,7 @@
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
+      if (profile.dict) mergeExerciseNames();
       renderCategoryPills();
       renderHistoryPills();
         if (!state.activeCategory || state.categories.indexOf(state.activeCategory) === -1) {
