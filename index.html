@@ -392,6 +392,21 @@
   .chart-summary div { text-align: center; }
   .chart-summary .num { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .chart-summary .lbl { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+  .xh-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .xh-day { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+  .xh-day.focus { border-color: #F472B6; background: rgba(244, 114, 182, 0.08); }
+  .xh-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
+  .xh-head .d { color: var(--text-muted); font-weight: 700; }
+  .xh-head .v { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .xh-tag { font-size: 10px; font-weight: 800; color: #F472B6; background: rgba(244, 114, 182, 0.15); border-radius: 999px; padding: 1px 6px; }
+  .xh-sets { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .xh-sets .top { font-weight: 800; color: var(--accent); }
+  .xh-sets.big { flex-direction: column; gap: 3px; font-size: 14px; font-weight: 700; margin: 0; }
+  .xh-focus { border-color: #F472B6; margin-bottom: 14px; }
+  .xh-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  .xh-notes b { color: var(--text); }
+  .xh-notes .up { color: var(--success); font-weight: 800; }
+  .xh-notes .down { color: #F87171; font-weight: 800; }
   .chart-caption { font-size: 11.5px; color: var(--text-faint); text-align: center; margin-top: 8px; }
 
   .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); margin: 0 auto; animation: spin 0.8s linear infinite; }
@@ -1599,6 +1614,15 @@
       }
       return out;
     }).join('');
+    var focusIdx = opts.focusDate ? series.map(function (p) { return p.date; }).indexOf(opts.focusDate) : -1;
+    if (focusIdx >= 0) {
+      var fp = pts[focusIdx];
+      marks = '<line x1="' + fp[0].toFixed(1) + '" y1="' + padT + '" x2="' + fp[0].toFixed(1) + '" y2="' + (h - padB) + '" stroke="#F472B6" stroke-width="1.2" stroke-dasharray="3 3"/>' + marks +
+        '<circle cx="' + fp[0].toFixed(1) + '" cy="' + fp[1].toFixed(1) + '" r="7" fill="none" stroke="#F472B6" stroke-width="2"/>';
+      if (!(showAll || focusIdx === bestIdx || focusIdx === pts.length - 1 || focusIdx === 0)) {
+        marks += '<text x="' + fp[0].toFixed(1) + '" y="' + (fp[1] - 10).toFixed(1) + '" text-anchor="middle" font-size="9.5" font-weight="800" fill="#F472B6">' + values[focusIdx] + '</text>';
+      }
+    }
     var xLabels = '';
     var labelIdx = series.length <= 6 ? series.map(function (_, i) { return i; }) : [0, Math.floor((series.length - 1) / 2), series.length - 1];
     labelIdx.forEach(function (i) {
@@ -2242,29 +2266,79 @@
     '</svg>';
   }
 
-  function openChart(name) {
+  // その種目の、日ごとの全セット(新しい日が上)
+  function exerciseHistoryHtml(name, focusDate, bestVal) {
+    var byDate = {};
+    state.entries.forEach(function (e) { if (e.name === name && e.date) (byDate[e.date] = byDate[e.date] || []).push(e); });
+    return Object.keys(byDate).sort().reverse().map(function (d) {
+      var items = byDate[d].slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+      var isCardio = items[0].minutes !== undefined;
+      var vol = items.reduce(function (sum, e) { return sum + entryVolume(e); }, 0);
+      var top = isCardio ? null : Math.max.apply(null, items.map(function (e) { return e.weight || 0; }));
+      var isBest = !isCardio && bestVal != null && top === bestVal;
+      return '<div class="xh-day' + (d === focusDate ? ' focus' : '') + '" data-xh-date="' + d + '">' +
+        '<div class="xh-head"><span class="d">' + formatDateLabelWithYear(d) + ' ' + countryFlag(entryCountry(items[0])) + (d === focusDate ? ' <span class="xh-tag">この日</span>' : '') + '</span>' +
+          '<span class="v">' + (isCardio ? items.reduce(function (sum, e) { return sum + e.minutes; }, 0) + '分' : (vol > 0 ? commaNum(Math.round(vol)) + 'kg' : items.length + 'セット')) + (isBest ? ' 🏆' : '') + '</span></div>' +
+        '<div class="xh-sets">' + items.map(function (e) { return '<span' + (!isCardio && e.weight === top ? ' class="top"' : '') + '>' + escapeHtml(isCardio ? formatSetLabel(e) : strengthSetText(e, true)) + '</span>'; }).join('') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  // その日の記録と、前回との比較(日別画面から種目をタップしたとき)
+  function exerciseFocusDayHtml(name, focusDate, series) {
+    var items = state.entries.filter(function (e) { return e.name === name && e.date === focusDate; })
+      .sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    if (!items.length) return '';
+    var idx = series.map(function (p) { return p.date; }).indexOf(focusDate);
+    var cur = idx >= 0 ? series[idx] : null, prev = idx > 0 ? series[idx - 1] : null;
+    var isCardio = items[0].minutes !== undefined;
+    var vol = items.reduce(function (sum, e) { return sum + entryVolume(e); }, 0);
+    var rows = [];
+    if (cur && prev) {
+      var diff = Math.round((cur.value - prev.value) * 100) / 100;
+      var cls = diff > 0 ? 'up' : (diff < 0 ? 'down' : '');
+      rows.push('前回(' + formatDateLabelWithYear(prev.date) + ')の最高 <b>' + prev.value + cur.unit + '</b> → この日 <b>' + cur.value + cur.unit + '</b> <span class="' + cls + '">(' + (diff > 0 ? '+' : diff < 0 ? '' : '±') + diff + cur.unit + ')</span>');
+    } else if (cur) {
+      rows.push('この種目の<b>初めての記録</b>です');
+    }
+    if (cur && idx > 0) {
+      var priorBest = Math.max.apply(null, series.slice(0, idx).map(function (p) { return p.value; }));
+      if (cur.value > priorBest) rows.push('🏆 この日に<b>自己ベスト更新</b>(それまで ' + priorBest + cur.unit + ')');
+    }
+    if (!isCardio) {
+      var best1RM = items.reduce(function (m, e) { return Math.max(m, e.weight ? estimate1RM(e.weight, e.reps) : 0); }, 0);
+      rows.push('総重量 <b>' + commaNum(Math.round(vol)) + 'kg</b>' + (best1RM > 0 ? ' ・ 推定1RM <b>' + Math.round(best1RM) + 'kg</b>' : '') + ' ・ ' + items.length + 'セット');
+    }
+    return '<div class="card xh-focus"><span class="card-label">' + formatDateLabelWithYear(focusDate) + ' の記録</span>' +
+      '<div class="xh-sets big">' + items.map(function (e, i) { return '<span>' + (i + 1) + '. ' + escapeHtml(isCardio ? formatSetLabel(e) : strengthSetText(e, true)) + '</span>'; }).join('') + '</div>' +
+      '<div class="xh-notes">' + rows.map(function (r) { return '<div>' + r + '</div>'; }).join('') + '</div></div>';
+  }
+
+  function openChart(name, focusDate) {
     $('chartTitle').textContent = name;
     var entries = state.entries.filter(function (e) { return e.name === name; });
     var series = dailyMaxSeries(name);
     var best = bestEntryForExercise(name);
     var cat = entries.length ? entries[0].category : '';
     var mus = musclesForExercise(name, cat);
-    var svg = buildTrendChartSvg(series, { height: 170, labels: series.length <= 12 ? 'all' : 'few' });
+    var svg = buildTrendChartSvg(series, { height: 170, labels: series.length <= 12 ? 'all' : 'few', focusDate: focusDate });
+    var bestVal = series.length && !series[0].isCardio ? Math.max.apply(null, series.map(function (p) { return p.value; })) : null;
     var unitLabel = series.length && series[0].isCardio ? (series[0].unit === 'km' ? '距離(km)' : '時間(分)') : '最大重量(kg)';
     var body = $('chartBody');
     body.innerHTML =
       '<div class="chart-head"><div class="trend-icon">' + exerciseIconSvg(name, cat) + '</div><div>' + muscleTextHtml(mus) + '</div></div>' +
+      (focusDate ? exerciseFocusDayHtml(name, focusDate, series) : '') +
       '<div class="chart-summary">' +
         '<div><div class="num">' + (best ? escapeHtml(formatSetLabel(best)) : '—') + '</div><div class="lbl">自己ベスト' + (best ? ' ・ ' + formatDateLabelWithYear(best.date) : '') + '</div></div>' +
         '<div><div class="num">' + series.length + '</div><div class="lbl">トレーニング日数</div></div>' +
         '<div><div class="num">' + entries.length + '</div><div class="lbl">総セット数</div></div>' +
       '</div>' +
       (svg
-        ? '<div class="card">' + svg + '</div><p class="chart-caption">日ごとの' + unitLabel + 'の推移 ・ 🟡 = 自己ベスト</p>'
+        ? '<div class="card">' + svg + '</div><p class="chart-caption">日ごとの' + unitLabel + 'の推移 ・ 🟡 = 自己ベスト' + (focusDate ? ' ・ <span style="color:#F472B6">◯ = この日</span>' : '') + '</p>'
         : '<p class="empty-note">グラフを表示するには2日以上のデータが必要です。</p>') +
-      '<div class="section-heading" style="margin-top:14px"><h3>日ごとのマックス</h3></div>' +
-      '<div class="trend-list" style="margin-top:8px">' + trendRowsHtml(series, 0) + '</div>';
+      '<div class="section-heading" style="margin-top:14px"><h3>過去の記録(全セット)</h3></div>' +
+      '<div class="xh-list">' + exerciseHistoryHtml(name, focusDate, bestVal) + '</div>';
     $('chartOverlay').classList.add('open');
+    body.scrollTop = 0;
   }
 
   // ---------------------------------------------------------------------
@@ -3409,7 +3483,7 @@
         '<div class="sc-stat cal"><div class="sc-stat-num">' + calories + '</div><div class="sc-stat-label">カロリー</div></div>' +
       '</div>' +
       '<div class="sc-ex-list">' + (rowsHtml || '<div class="sc-empty">記録がありません</div>') + '</div>' +
-      (showHint && rowsHtml ? '<div class="sc-hint">種目を長押しで名前・重さ・部位を編集</div>' : '');
+      (showHint && rowsHtml ? '<div class="sc-hint">種目をタップで過去の記録 ・ 長押しで名前・重さ・部位を編集</div>' : '');
   }
 
   // ---------------------------------------------------------------------
@@ -4108,6 +4182,7 @@
         timer = null;
         if (row) {
           if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+          containerEl.dataset.lpFired = '1'; // 長押し後の click でグラフが開かないように
           openGroupEdit(row.dataset.exercise, getDay ? getDay() : null);
           row = null;
         }
@@ -4120,6 +4195,13 @@
     containerEl.addEventListener('pointerup', cancel);
     containerEl.addEventListener('pointercancel', cancel);
     containerEl.addEventListener('pointerleave', cancel);
+    // ワンタップ: その種目の過去の記録とグラフ(この日に印をつける)を開く
+    containerEl.addEventListener('click', function (ev) {
+      if (containerEl.dataset.lpFired) { containerEl.dataset.lpFired = ''; return; }
+      var el = ev.target && ev.target.closest ? ev.target.closest('.sc-ex') : null;
+      if (!el || !el.dataset.exercise) return;
+      openChart(el.dataset.exercise, getDay ? getDay() : summaryDay);
+    });
   }
 
   function renderHistory() {
