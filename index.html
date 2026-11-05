@@ -1332,15 +1332,16 @@
   }
   // ---------------------------------------------------------------------
   // 種目名の統合(2026-11): 同じ種目なのに名前が揺れていたものを、
-  // 最後に使っていた名前(最新版)にそろえる。11/6 までの記録だけが対象で、
+  // 最後に使っていた名前(最新版)にそろえる(誤字は正しい表記に)。
+  // あわせて部位の付け間違いも直す。11/6 までの記録だけが対象で、
   // それ以降に旧名で記録したものは書き換えない。何度実行しても結果は同じ。
   // ---------------------------------------------------------------------
   var NAME_MERGE_UNTIL = '2026-11-06';
   var NAME_MERGE_GROUPS = [
-    ['ラッドプルダウン', ['ラットプルダウン', 'ラットプル']],
-    ['ラッドプルダウンナロー', ['ラットプルダウンナロー']],
+    ['ラットプルダウン', ['ラッドプルダウン', 'ラットプル']],
+    ['ラットプルダウンナロー', ['ラッドプルダウンナロー']],
     ['シーテッドロウ', ['シーテッドロー', 'ケーブルシーテッドロウ', 'ロー', 'ロウロー']],
-    ['ダイバーシングシーテッドロウ', ['ダイバージングシーテッドロー']],
+    ['ダイバージングシーテッドロウ', ['ダイバーシングシーテッドロウ', 'ダイバージングシーテッドロー']],
     ['チンニング', ['懸垂']],
     ['リアデルタ', ['リアデルト']],
     ['ショルダープレス', ['ダンベルショルダープレス']],
@@ -1357,11 +1358,51 @@
   ];
   var NAME_MERGE_MAP = {};
   NAME_MERGE_GROUPS.forEach(function (g) { g[1].forEach(function (old) { NAME_MERGE_MAP[old] = g[0]; }); });
+  // 誤字は日付に関係なくいつでも直す
+  var NAME_TYPO_FIX = {
+    'ラッドプルダウン': 'ラットプルダウン',
+    'ラッドプルダウンナロー': 'ラットプルダウンナロー',
+    'マシンラッドプルダウン': 'マシンラットプルダウン',
+    'ダイバージングラッドプル': 'ダイバージングラットプル',
+    'ダイバーシングシーテッドロウ': 'ダイバージングシーテッドロウ'
+  };
+  // 部位の付け間違いを直す(11/6 までの記録が対象。予測候補の辞書も正しい部位に寄せる)
+  var CATEGORY_FIX = {
+    'ディップス': '胸',
+    'フレンチプレス': '腕',
+    'リアデルタ': '肩',
+    'インクラインアームカール': '腕',
+    'インクラインダンベルショルダープレス': '肩',
+    'アーノルドインクラインダンベルショルダープレス': '肩',
+    'ケーブルプレスダウン': '腕',
+    'レッグカール': '脚',
+    '腹筋': '腹'
+  };
+  function fixedName(name, date) {
+    if (NAME_TYPO_FIX[name]) return NAME_TYPO_FIX[name];
+    var to = (date && date <= NAME_MERGE_UNTIL) ? NAME_MERGE_MAP[name] : null;
+    if (to) return NAME_TYPO_FIX[to] || to;
+    return name;
+  }
   function mergeExerciseNames() {
     var changed = [];
+    // 直した先の部位(「腹」など)が部位一覧になければ、有酸素の前に足す
+    var catsChanged = false;
+    Object.keys(CATEGORY_FIX).forEach(function (n) {
+      var c = CATEGORY_FIX[n];
+      if (state.categories.indexOf(c) !== -1) return;
+      var at = state.categories.indexOf('有酸素');
+      if (at === -1) state.categories.push(c); else state.categories.splice(at, 0, c);
+      if (!state.dict[c]) state.dict[c] = [];
+      catsChanged = true;
+    });
     state.entries.forEach(function (e) {
-      var to = NAME_MERGE_MAP[e.name];
-      if (to && e.date && e.date <= NAME_MERGE_UNTIL) { e.name = to; changed.push(e); }
+      var dirty = false;
+      var to = fixedName(e.name, e.date);
+      if (to !== e.name) { e.name = to; dirty = true; }
+      var cat = CATEGORY_FIX[e.name];
+      if (cat && e.category !== cat && e.date && e.date <= NAME_MERGE_UNTIL) { e.category = cat; dirty = true; }
+      if (dirty) changed.push(e);
     });
     // 予測候補(辞書)からも旧名を消し、最新版の名前を残す
     var dictChanged = false;
@@ -1369,13 +1410,26 @@
       var list = state.dict[cat] || [];
       var next = [];
       list.forEach(function (w) {
-        var to = NAME_MERGE_MAP[w] || w;
+        var to = fixedName(w, NAME_MERGE_UNTIL);
         if (to !== w) dictChanged = true;
+        // 部位を直した種目は、正しい部位の候補にだけ置く
+        if (CATEGORY_FIX[to] && CATEGORY_FIX[to] !== cat) { dictChanged = true; return; }
         if (next.indexOf(to) === -1) next.push(to);
       });
       state.dict[cat] = next;
     });
-    if (dictChanged) {
+    Object.keys(CATEGORY_FIX).forEach(function (n) {
+      var c = CATEGORY_FIX[n];
+      var used = state.entries.some(function (e) { return e.name === n; });
+      if (!used) return;
+      if (!state.dict[c]) state.dict[c] = [];
+      if (state.dict[c].indexOf(n) === -1) { state.dict[c].push(n); dictChanged = true; }
+    });
+    if (catsChanged) {
+      saveJSON(LS.categories, state.categories);
+      try { renderCategoryPills(); renderHistoryPills(); } catch (err) {}
+    }
+    if (dictChanged || catsChanged) {
       saveJSON(LS.dict, state.dict);
       if (cloudHooks && cloudHooks.writeProfile) cloudHooks.writeProfile();
     }
@@ -5695,7 +5749,7 @@
       if (profile.myPage) state.myPage = profile.myPage;
       if (profile.dailyNotes) state.dailyNotes = profile.dailyNotes;
       state.categories.forEach(function (c) { if (!state.dict[c]) state.dict[c] = []; });
-      if (profile.dict) mergeExerciseNames();
+      mergeExerciseNames();
       renderCategoryPills();
       renderHistoryPills();
         if (!state.activeCategory || state.categories.indexOf(state.activeCategory) === -1) {
