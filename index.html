@@ -5365,6 +5365,47 @@
   syncAddFormLR();
   bindLRMirror($('inputWeight'), $('inputWeightR'));
   bindLRMirror($('inputReps'), $('inputRepsR'));
+
+  // 種目名が過去の記録と一致したら、その種目の前回最後のセット
+  // (重量・回数、有酸素なら時間・距離)を初期値として入れる。
+  // 自動で入れた値は、名前を記録のない種目に変えたら消す(自分で打った値は残す)。
+  var PREFILL_IDS = ['inputWeight', 'inputReps', 'inputWeightR', 'inputRepsR', 'inputMinutes', 'inputDistance'];
+  var prefilledFor = null;
+  function setPrefill(id, v) {
+    var el = $(id);
+    el.value = (v === undefined || v === null) ? '' : v;
+    el.dataset.auto = '1';
+  }
+  function prefillFromLastRecord() {
+    var name = exerciseInput.value.trim();
+    var latest = name ? latestEntryForExercise(name) : null;
+    if (!latest) {
+      if (prefilledFor) {
+        PREFILL_IDS.forEach(function (id) { var el = $(id); if (el.dataset.auto === '1') { el.value = ''; el.dataset.auto = ''; } });
+        prefilledFor = null;
+        $('inputWeightR').dataset.touched = ''; $('inputRepsR').dataset.touched = '';
+      }
+      return;
+    }
+    prefilledFor = name;
+    if (latest.minutes != null) {
+      setPrefill('inputMinutes', latest.minutes);
+      setPrefill('inputDistance', latest.distance);
+      return;
+    }
+    setPrefill('inputWeight', latest.weight);
+    setPrefill('inputReps', latest.reps);
+    var lr = isLREntry(latest);
+    setAddFormLR(lr);
+    setPrefill('inputWeightR', lr ? rightWeight(latest) : latest.weight);
+    setPrefill('inputRepsR', lr ? rightReps(latest) : latest.reps);
+    // 左右で値が違った記録なら、右を自分で入れた扱いにして左に追従させない
+    var differs = lr && (rightWeight(latest) !== latest.weight || rightReps(latest) !== latest.reps);
+    $('inputWeightR').dataset.touched = differs ? '1' : '';
+    $('inputRepsR').dataset.touched = differs ? '1' : '';
+  }
+  exerciseInput.addEventListener('input', prefillFromLastRecord);
+  PREFILL_IDS.forEach(function (id) { $(id).addEventListener('input', function () { this.dataset.auto = ''; }); });
   $('editLR').addEventListener('change', function () { $('editTrioStrength').classList.toggle('lr-off', !this.checked); });
   bindLRMirror($('editWeight'), $('editWeightR'));
   bindLRMirror($('editReps'), $('editRepsR'));
